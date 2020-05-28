@@ -170,4 +170,61 @@
 * 怎么查看cpu上下文切换次数？多少次是不正常的呢？
 * cpu上下文切换次数过多会导致cpu使用率变高吗？
 
+#### [05 | 基础篇：某个应用的CPU使用率居然达到100%，我该怎么办？](https://time.geekbang.org/column/article/70476)
 
+> 笔记
+
+* 概念
+    * cpu使用率
+        * 时间分类
+            * usr/nice/sys/idle/iowait/irq/softirq/steal/gurst/guest_nice
+                * 和cat /proc/stat 显示的列一一对应
+        * 计算公式
+            * （cpu时间2 - cpu时间1）/ (cpu总时间2 - cpu总时间1)
+            *  cpu时间 = cpu中断次数(jiffies) * 单次时间(1 / CPU_HZ) = jiffies / CPU_HZ
+                * jiffies -> cpu总节拍数, 通过 /proc/stat 查看
+                * 例如200 jiffies = 200 / 100 = 2s 
+        * 节拍率
+            * CONFIG_HZ -> 内核节拍率
+                * grep 'CONFIG_HZ' /boot/config-$(uname -r) 查看
+            * CPU_HZ -> 用户空间节拍率,固定值100
+                * 表示1s时间中断100次，平均一次0.01s（作为cpu时间单位）
+
+* 工具
+    * top -> 查看cpu使用率和进程cpu使用率
+        * 按1查看各个cpu耗时
+    * pidstat -> 查看cpu使用率
+    * perf -> 分析cpu性能瓶颈
+        * perf top -> 查看热点函数
+            * Overhead -> 热点比例
+            * Shared -> 函数共享对象，内核/进程/动态链接库/内核模块名
+            * Object -> 共享对象类型
+                * [.] -> 进程/动态链接库
+                * [k] -> 内核
+            * Symbol -> 函数/指令名，找不到映射则显示16进制(函数地址）
+        * perf record -g -p -> 历史采样
+            * -g 采集调用链
+            * -p 指定进程
+        * perf report -> 针对record生成的perf.data进行分析
+            * perf report 解析函数名依赖它所在函数库，如果lib在容器内，需要进入容器执行perf
+    * ab -> http性能测试工具
+        * ab -c 10 -n 10000 http://127.0.0.1:8080/
+    * docker 
+        * docker cp perf.data phpfpm:/tmp -> 容器文件复制
+        * docker exec -it phpfpm:/tmp bash -> 访问容器
+    * 其他
+        * cat /etc/issue 查看系统
+        * apt-get update && apt-get install -y linux-perf linux-tools procps -> debian系统安装perf_4.9
+
+
+> 金句
+
+**我希望你在按照步骤操作之前，先不要查看源码（避免先入为主），而是把它当成一个黑盒来分析**
+
+这里本质上说，排查问题时，不要一开始就陷入细节，避免走入死胡同；一定要具有全局观，从宏观趋势去发现异常，再深入分析。
+
+> 问题
+
+1. 什么是cpu使用率，有哪些使用率，分别是怎么计算的?
+2. cpu使用率和平均负载的区别是什么？
+3. 如何排查cpu用户进程使用率过高的问题？怎么找到引起cpu飙升的代码点?
