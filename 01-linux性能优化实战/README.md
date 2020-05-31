@@ -228,3 +228,80 @@
 1. 什么是cpu使用率，有哪些使用率，分别是怎么计算的?
 2. cpu使用率和平均负载的区别是什么？
 3. 如何排查cpu用户进程使用率过高的问题？怎么找到引起cpu飙升的代码点?
+
+#### [07 | 案例篇：系统中出现大量不可中断进程和僵尸进程怎么办？（上）](https://time.geekbang.org/column/article/71064)
+
+> 笔记
+
+* 概念
+    * 进程状态
+	* R -> running/runnable -> 就绪队列中的进程
+	* D -> disk sleep -> 不可中断的睡眠进程 -> 正在与硬件例如磁盘进行交互
+	    * D 进程通常导致iowait升高, 平均负载升高
+	* Z -> zoombie -> 已经结束但是没有被（父进程)清理资源的进程
+	    * 未优雅关闭子进程的父进程会导致zoombie的子进程
+	* S -> interrupt sleep -> 可中断睡眠 -> 等待某个条件/事件被暂时挂起
+	* I -> idle -> 用在不可中断的<b>内核</b>线程上
+	    * I 不会导致平均负载的升高
+	* T -> 暂停或跟踪
+	    * stopped -> 向进程发生sigstop信号 -> 可通过sigcont 恢复
+	    * traced -> 使用调试器(gdb)进入端点时
+	* X -> dead -> 死亡进程
+	    * 不会在ps或top指标中出现
+    * 进程组
+	* ps -axjf -> 查看pid, pgid和sid
+	    * pid -> 进程id
+	    * pgid -> 进程组id
+		* 状态显示+，例如S+
+	    * sid -> 会话id -> 通过ssh连接server，生成一个会话
+		* 状态显示s，例如Ss+
+    * 磁盘与分区
+	* df -h -> 查看分区和挂载
+	* fdisk -l -> 查看物理磁盘
+	    * 利用cgroup对磁盘进行iops/bps限制时，需要指定物理磁盘
+
+
+* 工具
+    * docker 
+	* docker run --privileged --name app --device /dev/vda1:/dev/vda1 --device-write-iops /dev/vda1:3 --device-read-iops /dev/vda1:3 -itd feisky/app:iowait
+	    * --privileged -> 授予docker root 权限
+	    * --device -> 挂载设备
+	    * --device-write-iops -> cgroup限制磁盘写iops
+	    * --device-read-iops -> cgroup限制磁盘读iops
+
+> 问题
+
+* 进程有哪些状态，能否画出进程的状态机流转图？
+* 说说D和S进程的区别？
+	
+#### [08 | 案例篇：系统中出现大量不可中断进程和僵尸进程怎么办？（下）](https://time.geekbang.org/column/article/71382)
+
+> 笔记
+
+* 工具
+    * dstat -> 综合查看cpu/io指标
+	* dstat 1 10 -> 注意对比io读写量和cpu wait时间
+
+    * pidstat
+	* pidstat -d -> 查看进程io读写速率
+    
+    * strace
+	* trace -p -> 追踪进程的系统调用（排查io热点）
+
+    * pstree
+	* pstree -aps -> 查看父子进程关系(用于发现僵尸进程的父进程)
+
+    * perf
+	* perf record -> 排查负载热点
+
+> 金句
+
+**iowait升高不代表io有性能瓶颈**
+
+基于指标的分析，前提是我们要充分了解工具指标的含义和计算方法，它是否准确，是否适用于当前的性能场景。
+为了避免单指标误判，我们最好是采用多指标多工具分析法，相互佐证。
+
+> 问题
+
+1. 僵尸进程是怎么产生的？如何排查僵尸进程?
+2. 如何排查io热点进程及其对应热点代码？
