@@ -289,7 +289,7 @@
 	* trace -p -> 追踪进程的系统调用（排查io热点）
 
     * pstree
-	* pstree -aps -> 查看父子进程关系(用于发现僵尸进程的父进程)
+	* pstree -aps [Z进程 pid] -> 查看父子进程关系(用于发现僵尸进程的父进程)
 
     * perf
 	* perf record -> 排查负载热点
