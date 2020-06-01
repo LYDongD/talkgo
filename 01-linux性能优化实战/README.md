@@ -229,6 +229,47 @@
 2. cpu使用率和平均负载的区别是什么？
 3. 如何排查cpu用户进程使用率过高的问题？怎么找到引起cpu飙升的代码点?
 
+#### [06 | 案例篇：系统的 CPU 使用率很高，但为啥却找不到高 CPU 的应用?](https://time.geekbang.org/column/article/70822)
+
+> 笔记
+
+* 概念
+    * 短时进程 -> 表现为pid很短暂，经常发生变化
+        * 被其他父进程调用(exec())，生命很短的进程
+        * 不断重启的进程
+
+ps: 由于短时进程pid飘忽不定，很难通过pidstat或ps等进程维度的工具排查问题
+
+* 工具
+    * top -> 查看指定状态的进程
+        * o -> 开启filter
+        * S=R -> 过滤状态为R的进程
+    * perf -> 排查cpu热点进程（包括短时进程）
+        * perf record -g
+        * perf report
+            * 如果进程run in container, 依赖的库在容器内，需要回到容器内执行该命令
+    * pstree
+        * pstree | grep stress -> 排查父子进程
+        * 查看是否是父进程反复创建短时进程导致
+    * [execsnoop](https://github.com/brendangregg/perf-tools/blob/master/execsnoop)
+        * 监控exec()调用
+
+> 金句
+
+**对于这类问题，有没有更好的方法监控呢**
+
+execsnoop这类针对特定场景的工具是怎么来的？就是有人去思考，去尝试吗，去找到一种更高效的
+问题解决方案，才被设计开发出来。在日常工作中，无论是需求开发还是问题处理，是否仅仅满足
+于现有的处理方式，有没有更好更快的方法，能否减少重复劳动，减少排查的时间？小小的思考，
+带来的是时间效率的提升，最终落实为成本的节省。
+
+
+> 问题
+
+1. 是否遇到过应用不断重启的情况？怎么发现和排查这类问题？
+2. 如何查看指定状态的进程？
+
+
 #### [07 | 案例篇：系统中出现大量不可中断进程和僵尸进程怎么办？（上）](https://time.geekbang.org/column/article/71064)
 
 > 笔记
@@ -280,19 +321,19 @@
 
 * 工具
     * dstat -> 综合查看cpu/io指标
-	* dstat 1 10 -> 注意对比io读写量和cpu wait时间
+	    * dstat 1 10 -> 注意对比io读写量和cpu wait时间
 
     * pidstat
-	* pidstat -d -> 查看进程io读写速率
+	    * pidstat -d -> 查看进程io读写速率
     
     * strace
-	* trace -p -> 追踪进程的系统调用（排查io热点）
+	    * trace -p -> 追踪进程的系统调用（排查io热点）
 
     * pstree
-	* pstree -aps [Z进程 pid] -> 查看父子进程关系(用于发现僵尸进程的父进程)
+	    * pstree -aps [Z进程 pid] -> 查看父子进程关系(用于发现僵尸进程的父进程)
 
     * perf
-	* perf record -> 排查负载热点
+        * perf record -> 排查负载热点
 
 > 金句
 
