@@ -394,3 +394,74 @@ execsnoop这类针对特定场景的工具是怎么来的？就是有人去思�
 
 1. 什么是中断，如何查看进程的中断cpu使用率? 
 2. 以网卡接收数据为例，说说该过程发生了哪些中断？
+
+#### [10 | 案例篇：系统的软中断CPU使用率升高，我该怎么办？](https://time.geekbang.org/column/article/72147)
+
+> 笔记
+
+* 软中断有哪些常见类型？
+    * 网络收发 -> NET_TX/NET_RX
+    * 定时-> TIMER
+    * 调度-> SCHED
+    * RCU锁 -> RCU 
+        * 一种限制和包含共享资源的锁机制
+
+* 如何排查软中断使用率增加的问题
+    * top -> 发现si% 增加
+        * ksoftirqd/1或ksoftirqd/0 使用率增加
+    * watch -d cat /proc/softirqs 
+        * 观察不同类型软中断变化速度 -> NET_RX变化速度较快
+            * 说明网络包接收中断变多，可能有网络问题
+            * 表现为远程访问服务变卡，ping时长增加并有丢包现象
+    * sar -n DEV 1 -> 查看网卡(pps/bbs) -> eth0的rxpck/s(pps)增加
+        * pps -> 每s接收/发送网络帧数
+        * bps -> 每s接收/发送网络字节数
+        * 每个包的大小 = bps * 1000byte / pps 
+            * 如果 < 100 byte 通常认为是小包
+    * tcpdump -i eth0 -n tcp port 80 -> 抓包
+        * -i 指定网卡
+        * -n 指定协议
+        * port 指定接收端口
+        * 结果：
+            * Flags [S] -> sync 包
+            * 172.18.155.128.http > 183.238.179.102.50979 
+                * 数据包来源和目标
+    * 结论 
+        * 网络卡顿(ping延时丢包)是因为sync flood 攻击导致
+            * ping -> top -> softirqs -> sar -> tcpdump
+
+* 如何模拟sync flood 攻击
+    * 使用hping3发送网络包
+        * hping3 -S -p 80 -i u100 192.168.0.30
+            * -S -> 发送sync包
+            * -p -> 指定服务端口
+            * -i -> 指定发送频率，调整它控制请求压力
+                * u100 -> 100us一次
+    * mac如何安装hping3
+
+```
+brew uninstall hping
+cd ~
+mkdir hping
+cd hping
+git clone https://github.com/antirez/hping.git
+brew install tcl-tk
+brew install libpcap
+./configure
+make
+sudo make install
+hping
+
+```
+> 金句
+
+**所以我们直接查看文件内容，得到的只是累积中断次数，对这里的问题并没有直接参考意义**
+
+分析问题的关键是"对比"，好比是做试验也要设置实验组和对比组，我们可以和过去的历史数据
+对比，和其他指标进行对比，和今天的其他时段对比，和以前的同一时段对比等等，对比分析比
+直觉分析更靠谱，更科学。
+
+> 问题
+
+1. 一般是怎么排查网络问题的，例如网络变卡时，怎么排查原因？
+2. 请说说什么是软中断，系统有哪些常见的软中断类型，软中断升高问题如何排查？
