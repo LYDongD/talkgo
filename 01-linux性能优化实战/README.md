@@ -637,20 +637,20 @@ hping
     * 使用perf-map-agent 生成/tmp/perf-<pid>.map
     		* perf会去临时文件/tmp/perf-<pid>.map查找指定进程的符号表
     * 如何使用perf-map-agent
-	* 如何使用curl下载github压缩包
-		* curl -L -O https://github.com/jvm-profiling-tools/perf-map-agent/archive/master.zip 
-	* 如何安装cmake并保证版本>2.8
-		* yum install -y cmake
-	* 编译构建
-	    	* cmake .
-			* CMake Error: your CXX compiler: "CMAKE_CXX_COMPILER-NOTFOUND" was not found.   Please set CMAKE_CXX_COMPILER to a valid compiler path or name.
-		    	* yum install gcc-c++
-	* 生成perf-java套件的link
-		* bin/create-links-in <somedir>
-			* perf-java-flames   
-			* perf-java-record-stack  
-			* perf-java-report-stack  
-			* perf-java-top
+		* 如何使用curl下载github压缩包
+			* curl -L -O https://github.com/jvm-profiling-tools/perf-map-agent/archive/master.zip 
+		* 如何安装cmake并保证版本>2.8
+			* yum install -y cmake
+		* 编译构建
+	    		* cmake .
+				* CMake Error: your CXX compiler: "CMAKE_CXX_COMPILER-NOTFOUND" was not found.   Please set CMAKE_CXX_COMPILER to a valid compiler path or name.
+		    		* yum install gcc-c++
+		* 生成perf-java套件的link
+			* bin/create-links-in <somedir>
+				* perf-java-flames   
+				* perf-java-record-stack  
+				* perf-java-report-stack  
+				* perf-java-top
 	* 分析es进程
 	    	* 使用perf-java-top
 			* 错误: 找不到或无法加载主类 net.virtualvoid.perf.AttachOnce
