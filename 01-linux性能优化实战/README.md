@@ -635,7 +635,7 @@ hping
 
 * 如何用perf分析Java进程？
     * 使用perf-map-agent 生成/tmp/perf-<pid>.map
-	* perf会去临时文件/tmp/perf-<pid>.map查找指定进程的符号表
+    		* perf会去临时文件/tmp/perf-<pid>.map查找指定进程的符号表
     * 如何使用perf-map-agent
 	* 如何使用curl下载github压缩包
 		* curl -L -O https://github.com/jvm-profiling-tools/perf-map-agent/archive/master.zip 
