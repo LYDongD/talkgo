@@ -744,4 +744,42 @@ ps: 内存分配是懒加载模式，只有发生缺页异常才会实际分配�
 1. 什么是缺页异常？如何理解linux系统中的虚拟内存?
 2. free命令中的avalible可用内存指的是什么？包括buffer和cache吗?
 
+#### [16 | 基础篇：怎么理解内存中的Buffer和Cache？](https://time.geekbang.org/column/article/74633)
 
+> 笔记
+
+* 怎么理解free指令中的buff/cache指标
+    * 数据从哪里获取? 
+        * buffer -> /proc/meminfo -> Buffers
+            * Buffers -> 磁盘缓存
+        * cache -> /proc/meminfo -> cached + SReclaimable
+            * cached -> 页缓存
+            * SReclaimable -> 可重用的slab内存
+
+* 模拟文件写和磁盘写
+    * 文件写 -> 查看buff和cache的变化
+        * 清缓存：echo 3 > /proc/sys/vm/drop_caches
+        * 写文件: dd if=/dev/urandom of=/tmp/file bs=1M count=500
+        * 查看buff/cache变化: vmstat 1
+·       * -> 发现cache随着bo的增加明显增加
+   * 磁盘写 
+        * 清缓存：echo 3 > /proc/sys/vm/drop_caches
+        * 写块设备: dd if=/dev/urandom of=/dev/sdb1 bs=1M count=2048
+        * 查看buff/cache变化: vmstat 1
+·       * -> 期望buff明细增加
+
+* 模拟文件读和磁盘读
+    * 文件读
+        * dd if=/tmp/file of=/dev/null
+        * -> bi增加，同时cache也明细增加
+    * 磁盘读
+        * dd if=/dev/vda1 of=/dev/null
+        * -> bi增加，同时buff也明细增加
+
+> 金句
+
+**你一定要养成查文档的习惯，并学会解读这些性能指标的详细含义**
+
+要学会调整自己的第一反应，遇到问题首先不是google，先想想，能否通过查阅文档
+获取答案，文档实际上已经可以解决80%的问题；当然，前提是对文档以及它的用法
+有一定了解，以便于我们快速检索定位目标问题。
