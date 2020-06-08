@@ -759,6 +759,8 @@ ps: 内存分配是懒加载模式，只有发生缺页异常才会实际分配�
 * 模拟文件写和磁盘写
     * 文件写 -> 查看buff和cache的变化
         * 清缓存：echo 3 > /proc/sys/vm/drop_caches
+            * 为什么是3？
+                * 查看proc文档 -> 3可以同时清理：pagecache,  dentries  and  inodes
         * 写文件: dd if=/dev/urandom of=/tmp/file bs=1M count=500
         * 查看buff/cache变化: vmstat 1
 ·       * -> 发现cache随着bo的增加明显增加
@@ -768,6 +770,9 @@ ps: 内存分配是懒加载模式，只有发生缺页异常才会实际分配�
         * 查看buff/cache变化: vmstat 1
 ·       * -> 期望buff明细增加
 
+ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会走cache后又经过buffer
+
+
 * 模拟文件读和磁盘读
     * 文件读
         * dd if=/tmp/file of=/dev/null
@@ -775,6 +780,24 @@ ps: 内存分配是懒加载模式，只有发生缺页异常才会实际分配�
     * 磁盘读
         * dd if=/dev/vda1 of=/dev/null
         * -> bi增加，同时buff也明细增加
+
+* 如何统计进程的物理内存使用量？
+    * top -> 取RES相加？
+        * RES可能包括share,buff和cache，这些有可能是进程共享的，相加会出现重复
+    * ps -> 取RSS相加
+        * 可能的问题同top
+    * /proc/<pid>/smaps -> 取Pss相加
+        * pss = 私有的 + 共享的属于当前进程的部分
+        * 例如share被5个进程共享，共500k, 私有100k
+            * pss = 100 + 500 / 5 = 200k
+
+* /dev/null,/dev/vdb1, 和/tmp/file 三种文件类型有什么区别?
+    * 使用ls -l 查看，并通过 info coreutils 'ls invocation' 查看ls文档
+        * d -> 目录
+        * c -> 字符文件
+        * b -> 设备块文件
+        * n -> 网络文件
+        * 
 
 > 金句
 
