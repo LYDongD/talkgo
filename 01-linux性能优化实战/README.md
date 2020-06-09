@@ -813,3 +813,60 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 要学会调整自己的第一反应，遇到问题首先不是google，先想想，能否通过查阅文档
 获取答案，文档实际上已经可以解决80%的问题；当然，前提是对文档以及它的用法
 有一定了解，以便于我们快速检索定位目标问题。
+
+#### [17 | 案例篇：如何利用系统缓存优化程序的运行效率?](https://time.geekbang.org/column/article/75242)
+
+> 笔记
+
+* 如何在centos环境下安装bcc工具套件
+    * 如何查看内核版本？
+        * uname -r -> 版本3.1
+            * 内核版本 < 4.1 时无法安装bcc
+    * 如何升级内核版本？
+        * 更新yum源并下载最新的rpm包
+            * rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+            * rpm -Uvh https://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+            * yum --enablerepo=elrepo-kernel install kernel-ml-devel kernel-ml
+        * 查看当前系统所有内核版本
+            * rpm -qa | grep -i kernel
+        * 切换新内核
+            * cat /boot/grub2/grub.cfg | grep menuentry -> 查看内核完整名称
+            * grub2-set-default 'CentOS Linux (5.7.1-1.el7.elrepo.x86_64) 7 (Core)' -> 切换内核
+            * grub2-editenv list ->  查看当前内核
+        * 重启
+            * reboot
+        * 确认
+            * uname -r -> 5.7.1-1.el7.elrepo.x86_64
+                * 内核已经升级到5.7
+    * 安装bbc-tools
+        * yum install -y bcc-tools
+        * export PATH=$PATH:/usr/share/bcc/tools -> 添加环境变量
+        * source ~/.bash_profile
+        * 使用cachestat和cachetop
+            * cachestat -> 查看系统整体的缓存命中率
+            * cachetop -> 查看进程级别的缓存命中率
+
+* 如何查看指定文件的缓存大小
+    * 安装pcstat
+        * 下载go 
+            * curl -L -O https://dl.google.com/go/go1.14.4.linux-amd64.tar.gz
+            * tar -xvf go1.14.4.linux-amd64.tar.gz
+        * 添加环境变量
+            * export GOPATH=~/go
+            * export PATH=~/go/bin:$PATH
+            * source ~/.bash_profile
+        * 安装pcstat
+            * 设置公共代理 -> 否则无法下载golang.org包
+                * export GO111MODULE=on
+                * export GOPROXY=https://goproxy.io
+            * 下载包
+                * go get golang.org/x/sys/unix
+                * go get github.com/tobert/pcstat/pcstat
+   * 使用pcstat
+        * pcstat /bin/ls -> 查看ls文件的缓存    
+            * echo 3 > /proc/sys/vm/drop_caches
+            * pcstat /bin/ls -> 此时cache = 0
+            * ls
+            * pcstat /bin/ls -> 此时cache > 0
+    
+       
