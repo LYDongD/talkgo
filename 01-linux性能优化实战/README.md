@@ -911,3 +911,31 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 2. 依据是什么？-> 批判思维
 3. 评估指标有哪些? -> 结果思维
         
+#### [18 | 案例篇：内存泄漏了，我该如何定位和处理？](https://time.geekbang.org/column/article/75670)
+
+> 笔记
+
+* 内存不足可能引发的问题
+    * 新的进程无法启动
+    * OOM导致进程被杀死
+    * 触发swap机制(未关闭swap的情况下），导致性能下降
+
+* 内存问题
+    * 访问了非法的内存
+    * 内存泄露导致内存消耗殆尽
+        * 堆/文件映射段动态分配的内存未正确回收
+        * 数据/只读/栈的段不会导致内存泄露
+
+* 如何查找内存分配热点进程和代码
+    * vmstat 3
+        * 查看free, buffer和cache
+            * buffer和cache不变的情况下，free持续下降
+                * 说明有进程一直在申请内存,且当前没有释放
+    * memleak -> bcc-tools 工具
+        * memleak -a 
+            * Exception: Failed to compile BPF text
+        * memleak -a -p 21379 -> 前提是需要知道热点进程
+            * 打印内存热点代码
+
+> 金句
+
