@@ -969,4 +969,56 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
         * g1参数maxGcPauseMills=200 可能设置过小, 调大为800
             * 待验证
 
+#### [19 | 案例篇：为什么系统的Swap变高了（上）](https://time.geekbang.org/column/article/75797)
 
+> 笔记
+
+* 系统应对内存不足时的机制有哪些？
+    * 回收内存
+        * 回收buffer/cache等可回收内存
+            * 回收文件页
+                * 脏页怎么回收？
+                    * 同步磁盘后释放
+                        * fsync 系统调用
+                        * pdflush定时刷新
+        * swap换出进程堆内存
+            * 回收匿名页
+    * OOM
+        * 根据oom_score杀死内存消耗大，cpu消耗小的进程
+    
+* swap如何交换内存？什么时候触发swap?
+    * 交换
+        * 换出 -> 将内存写入磁盘并释放内存
+        * 换人 -> 从磁盘读入内存并释放磁盘
+    * 时机
+        * 分配内存时，内存不可用 -> 直接内存回收
+        * 内核线程定期检测回收 -> kswapd0(比较阈值回收）
+            * 查看阈值
+                * cat /proc/zoneinfo -> cat /proc/zoneinfo | grep -i normal -A 15
+                    * pages_min -> 最小阈值
+                    * pages_low -> 低阈值
+                    * pages_high -> 高阈值
+                    * pages_free -> 剩余内存
+                * 当free < low 时，触发swap，使free回到high以上
+            * 调整阈值
+                * /proc/sys/vm/min_free_kbytes
+                    * low = min * 5 / 4
+                    * high = min * 3 / 2
+    * 如何查看是否开启swap机制？
+        * free -h 显示swap.total = 0 
+            * 说明swap未开启
+
+    * 为什么free显示内存充足的情况下仍然发生swap?
+        * NUMA架构下node本地内存不足触发swap
+            * 查看有几个node及其可用内存
+                * numactl --hardware
+                    * normal -> 普通内存区
+                    * DMA -> 直接内存访问区
+                    * MOVABLE -> 伪内存区
+            * 查看node的内存区和阈值
+                * cat /proc/zoneinfo | grep -i normal -A 15
+                * 当free < low时会触发 
+                    * /proc/sys/vm/zone_reclaim_mode
+                        * 0 -> 
+                
+    *              
