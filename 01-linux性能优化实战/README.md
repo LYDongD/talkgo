@@ -983,6 +983,11 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
                         * pdflush定时刷新
         * swap换出进程堆内存
             * 回收匿名页
+    * 系统怎么选择回收内存的方式?
+        * 是否开启swap
+            * 关闭 -> 不会进行swap
+            * swappiness -> 值越大，swap越积极
+               * /proc/sys/vm/swappiness -> 设置swappniess
     * OOM
         * 根据oom_score杀死内存消耗大，cpu消耗小的进程
     
@@ -1017,8 +1022,26 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
                     * MOVABLE -> 伪内存区
             * 查看node的内存区和阈值
                 * cat /proc/zoneinfo | grep -i normal -A 15
-                * 当free < low时会触发 
-                    * /proc/sys/vm/zone_reclaim_mode
-                        * 0 -> 
-                
-    *              
+                * 当free < low时会触发
+                    * 调整NUMA回收策略
+                        * echo [数值] > /proc/sys/vm/zone_reclaim_mode
+                            * 0 -> 从其他node获取空闲内存或从本地内存获取
+                            * 2 -> 刷新脏页回收内存
+                            * 4 -> swap方式回收内存           
+    * elasticsearch对swap机制的限制
+        * 避免jvm 堆被换出，gc时重新换入导致性能下降（耗时数分钟）
+            * 关闭系统swap机制
+                * swapoff -a -> 运行时关闭
+                * /etc/fstab -> 永久关闭
+                    * 注释swap相关的行
+            * es 服务增加内存锁
+                * vim config/elasticsearch.yml -> bootstrap.memory_lock: true
+                    * GET _nodes?filter_path=**.mlockall -> 查看是否锁定内存
+            * 降低系统swap倾向
+                * vim /proc/sys/vm/swappiness -> vm.swappiness=1
+                * 该方法不能完全避免swap发生
+
+> 问题
+
+1. 内存不足时，系统通过哪些机制回收内存？
+2. jvm应用是否开启内存交换机制？可能有什么问题？如何关闭swap?
