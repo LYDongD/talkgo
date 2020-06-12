@@ -1045,3 +1045,61 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 
 1. 内存不足时，系统通过哪些机制回收内存？
 2. jvm应用是否开启内存交换机制？可能有什么问题？如何关闭swap?
+
+#### [20 | 案例篇：为什么系统的Swap变高了？（下）](https://time.geekbang.org/column/article/75973)
+
+> 笔记
+
+* 如何开启swap
+    * fallocate -l 1G /mnt/swapfile -> 预分配1G的空间给指定swap文件
+    * chmod 600 /mnt/swapfile -> 禁止非root读写swap
+    * mkswap /mnt/swapfile -> 创建分区文件
+    * swapon /mnt/swapfile -> 开启swap
+        * swapon: /mnt/swapfile: swapon failed: Invalid argument (centos7)
+            * 猜想：fallocate机制导致swap分配失败 -> 用dd写入文件
+        * dd if=/dev/zero of=/mnt/swapfile bs=1G count=1
+            * 重复上诉过程
+    * free -h 查看swap是否已经分配成功
+
+* 如何模拟内存吃紧的场景?
+    * 如何降低free?
+        * dd -> 磁盘读写，free -> buffer 
+        * dd if=/dev/vda1 of=/dev/null bs=1G count=20
+            * 磁盘读写会消耗内存作为buffer
+    * 如何观察内存变化?
+        * sar
+            * sar -r -S 1
+                * %memused -> 内存使用率
+                * %swpused -> 交换区使用率
+        * 发现内存使用率和buffer升高，但是swapused并未升高
+            * swap机制未触发
+    * 如何调整swap机制触发优先级
+        * echo 60 > /proc/sys/vm/swappiness 
+        * 查看swap阈值相对变化
+            * watch -d grep -A 15 -i normal /proc/zoneinfo
+        * 执行 dd if=/dev/vda1 of=/dev/null bs=1G count=20
+            * 观察/proc/zoneinfo 发现free在low和hight之间循环变化
+            * 观察 sar 输出，swapused升高，说明swap机制触发
+            * 说明当free<low时触发了swap并使free恢复到hight以上的水平
+    * 如何查看swap使用较多的进程
+        * 进程的swap使用情况 -> /proc/*/status
+            * smem --sort swap
+    * 如何关闭swap
+        * swapoff -a
+    
+* swap机制的一些说明
+    * 即使开启swap，也未必会使用它，至少需要调整2个地方
+        * vm.swappniess 优先级是否调高
+        * /proc/zoneinfo 中free 是否 < low
+            * 可通过 /proc/sys/vm/min_free_kbytes 调整
+    * swap中的free包括可用内存+cache(文件页），但是不包括buffer
+        * 磁盘io导致buffer升高依然会触发swap
+
+> 最佳实践
+
+参考es的配置，jvm应用应该禁用或尽可能避免swap的发生
+
+* 系统层面关闭swap
+* 系统层面调低swap倾向(vm.swappniess)
+* 进程锁定内存 -> mlock()或mlockall()
+* jvm堆初始和最大值一致，避免内存扩展时内存不足发生swap换入
