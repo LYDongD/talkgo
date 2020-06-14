@@ -1156,3 +1156,24 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 并确定瓶颈。如果说性能问题解决分为定位瓶颈和性能优化，那么定位即找出异常的指标，优化即评估指标是
 否达到预期。而在分析的时候，不能孤立的看待问题，要把指标关联起来看，单个指标要关联历史和现在，对
 比分析，关注其变化趋势，才能快速定位。
+
+#### [22 | 答疑（三）：文件系统与磁盘的区别是什么？](https://time.geekbang.org/column/article/76675)
+
+> 笔记
+
+* 回收内存的三种策略
+    * 文件页回收 -> buffer/cache的回收
+	* LRU -> 回收不活跃(inactive)的文件页
+	* 查看活跃/不活跃内存页
+	    * cat /proc/meminfo | grep -i active
+    * 匿名页回收 -> swap
+	* LRU
+    * OOM -> 根据oom_score 
+	* 内存计算
+	    * 进程申请的虚拟内存 + used < free 则会触发
+		* 可通过overcommit机制避免oom
+	* 查看OOM日志
+	    * dmesg -T | grep -i "Out of memory"
+		* 什么时间什么进程被杀死
+		* 杀死时进程的内存(rss)大小
+	    
