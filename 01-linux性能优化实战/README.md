@@ -1163,17 +1163,37 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 
 * 回收内存的三种策略
     * 文件页回收 -> buffer/cache的回收
-	* LRU -> 回收不活跃(inactive)的文件页
-	* 查看活跃/不活跃内存页
-	    * cat /proc/meminfo | grep -i active
+	    * LRU -> 回收不活跃(inactive)的文件页
+	    * 查看活跃/不活跃内存页
+	        * cat /proc/meminfo | grep -i active
+        * 如何查看进程buff/cache的动态变化？
+            * 只能查看系统层面的动态变化，无法查看进程级别
+                * cachetop -> 查看进程级别的缓存命中率
+                * pidstat/ps -> 查看进程的虚拟内存，物理内存和内存使用率
     * 匿名页回收 -> swap
-	* LRU
+	    * LRU
+        * 可以查看进程级别的swap使用情况
+            * smem
     * OOM -> 根据oom_score 
-	* 内存计算
-	    * 进程申请的虚拟内存 + used < free 则会触发
-		* 可通过overcommit机制避免oom
+	    * 内存计算
+	        * 进程申请的虚拟内存 + used < free 则会触发
+		    * 可通过overcommit机制避免oom
 	* 查看OOM日志
 	    * dmesg -T | grep -i "Out of memory"
-		* 什么时间什么进程被杀死
-		* 杀死时进程的内存(rss)大小
-	    
+
+* 如何计算进程消耗的总物理内存？
+    * 累计指标Pss -> 独占物理内存(uss) + 按比例分配后的共享内存
+        * smem 累计Pss
+            * smem | awk '{total+=$7}; END{printf "%d\n", total}'
+        * 提取/proc/[1-9]*/smaps
+            * grep Pss /proc/[1-9]*/smaps | awk '{total+=$2}; END {printf "%d kB\n", total }'
+
+> 金句
+
+**比如，在需要大量内存的场景中，你就可以考虑用栈内存、内存池、HugePage 等方法，来优化内存的分配和管理**
+
+回到jvm应用上面，我们如何监控内存泄露问题呢？频繁gc或gc后内存释放不明显，是否就意味着内存泄露？如何排查
+内存泄露的热点代码？这些是接下来需要去进一步探讨的问题。
+
+
+
