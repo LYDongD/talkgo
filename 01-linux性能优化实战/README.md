@@ -1228,11 +1228,11 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 
 * 文件系统有哪些分类
     * 磁盘文件系统 -> 数据存储到磁盘
-	* Ext4, XFS
+	    * Ext4, XFS
     * 内存文件系统 -> 不持久化(虚拟）
-	* /proc,/sys
+	    * /proc,/sys
     * 网络文件系统 -> 可访问其他机器数据
-	* NFS,SMB
+	    * NFS,SMB
 
 * 如何访问文件系统中的文件
     * 通过VFS提高的统一接口以挂载目录的方式访问底层不同类型的文件系统
@@ -1254,9 +1254,37 @@ ps: 现代的libux系统，写文件的时候不会经过两次cache，即不会
 	    * 阻塞IO和非阻塞IO
 	* 是否等待IO结果
 	    * 同步和异步IO
-	    
 
+* 如何评估文件系统的性能？
+    * 容量 -> 文件数据或索引节点容量不足都会导致性能问题 
+        * 文件数据容量 -> df -h
+        * 索引节点容量 -> df -ih
+            * 小文件过多可能导致inode容量耗尽
+    * 缓存
+        * 页缓存
+            * page cache
+        * 索引节点/目录项缓存
+            * slab -> /proc/slabinfo
+                * cat /proc/slabinfo | grep -E '^#|dentry|inode' -> 查看slab占用情况
+                * slabtop -> 分析slab缓存占用百分比
 
-    
+* find / -name xxx 对缓存使用情况分析
+    * 先清空缓存 -> echo 3 > /proc/sys/vm/drop_caches
+    * 执行vmstat 观察buffer和cache的变化
+    * 执行slabtop 观察dentry和inode_cache的变化
+    * 执行find / -name xxx ，对照观察vmstat
+        * 指标是否升高？哪个指标升高
+            * vmstat指标：buffer 和 cache 都有升高 -> 说明查找时写入缓存
+                * 注意，cache = 页缓存 + reclaimableSlab(目录和索引节点缓存）
+            * slabtop指标：
+                * proc_inode_cache 增加，内存文件系统索引节点缓存增加
+                    * 因为会扫描/proc目录
+                * ext4_inode_cache 增加（增加明显），本地文件系统所有节点缓存增加
+                * dentry 增加（增加明细）
+                * inode_cache 增加
+    * 再次执行 find / -name xxx
+        * 执行非常快，说明利用了缓存
 
+            
+ 
 
