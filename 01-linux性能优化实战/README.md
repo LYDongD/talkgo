@@ -1425,4 +1425,65 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
 一方面可能是工具的使用方法不当，例如本节案例中，io操作发生在子线程，采用strace -p 并不会
 追踪子线程的系统调用，这个时候应该参考文档，进一步调整参数，补充忽略的部分。
 
+#### [28 | 案例篇：一个SQL查询要15秒，这是怎么回事？](https://time.geekbang.org/column/article/78633)
 
+* 如何排除mysql服务性能问题？
+    * 案例准备遇到的问题
+        * 由于案例要启动一个mysqld容器，可能监听3306端口，与宿主机原mysqld服务端口冲突，需要先关闭mysqld服务
+            * systemctrl stop mysqld
+            * lsof -i:3306
+        * 由于案例在容器中启动，3306端口并没有和宿主机关联(不需要从宿主机或外部服务访问它），可以不必关闭宿主机mysql
+            * mysql容器仅和相关应用关联
+        * 实现准备数据库脚本
+            * 创建库/表
+        * 拉取镜像的时候如何查看网络收发指标？
+            * sar -n DEV 1
+                * 查看rx/tx 对应的bps和pps
+                    * bps 最大没有超过1000kb -> 查看服务器配置，网络限制最大不超过1mbps
+        * 执行脚本插入时，等待很久，怎么知道数据库是否正在执行插入
+            * show processlist -> 查看当前正在访问数据库的连接及其sql
+                * 指定host连接正在执行insert, 状态为query end
+                    * query end —> 可能是磁盘空间不足导致insert 卡住
+                    * df -h 查看磁盘空间使用，磁盘饱和，无可用空间 -> 删除部分数据
+                        * du -sh /* | sort -nr -> 找出磁盘占用较多的目录进行选择性删除
+                    * 腾出空间后，insert结束，show processlist中insert线程已经消失
+    * 分析流程
+        * top -> 查看cpu, 内存指标
+            * iowait 较高，超过50%
+        * iostat -d -x 1 -> 查看磁盘状态
+            * util -> 接近饱和
+            * rkb/s -> 接近100m/s的读
+        * pidstate -d 1 -> 查看进程io
+            * mysqld 进程读接近100m/s
+            * 记录进程号(pid) -> 18588
+        * iotop -> 查看io热点进程
+            * mysqld 进程读接近100m/s
+            * 进程线程号(tid) -> 21678
+            * ps -efT | grep 21678 -> 查看线程所属的进程
+                * 进程为18588
+                * pstree -a -p 18588
+                    * 查看该进程是否包含线程21678
+        * 查看进程正在进行的系统调用
+            * strace -p 18588 -f
+                * 大量read函数，fd=37
+                * read函数对应线程为21678
+        * lsof -p 18588 -> 查看进程fd=37对应的文件
+            * 注意这里lsof -p 必须加进程号，如果线程号将失败
+                * 例如执行 lsof -p 21678 -> echo $? (查看命令执行结果） 
+                    * 返回1，说明失败 -> 0才是成功   
+            * /var/lib/mysql/test/products.MYD
+                * 怀疑该目录是数据库用于存放数据的目录
+                    * show variables like '%datadir%'
+                        * -> /var/lib/mysql/ 
+                * 查看当前数据库正在执行的操作
+                    * show processlist
+                        * select * from products where productName='geektime' -> sending data (state)
+                        * 结合读写目录，可以猜测该sql是io热点sql -> 造成100m/s的读
+                            * 慢sql排查 -> 是否添加索引
+                            * explain select * from products where productName='geektime'
+                                * type = ALL -> 全表扫描
+                    * 猜测是全表扫描导致慢查询，引起io性能问题
+                        * 为表的查询字段建立索引
+                            * create index idx_productName on products(productName(64));    
+
+                        
