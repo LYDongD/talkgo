@@ -1486,4 +1486,67 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
                         * 为表的查询字段建立索引
                             * create index idx_productName on products(productName(64));    
 
-                        
+
+#### [29 | 案例篇：Redis响应严重延迟，如何解决？](https://time.geekbang.org/column/article/78984)
+
+> 笔记
+
+* 如何排查redis性能问题？
+    * 采用案例要求模式执行，无法访问10000端口
+        * 案例模式（--network=container)
+            * docker run --name=redis -itd -p 10000:80 feisky/redis-server
+            * docker run --name=app --network=container:redis -itd feisky/redis-app
+        * 采用宿主机网络共享模式(--network host 或端口映射)
+            * docker run --name=redis -itd --network host feisky/redis-server
+            * docker run --name=app -p 10000:80 -itd feisky/redis-app
+        * 外网服务依然无法访问
+            * 重启linux系统
+            * 重启后网络恢复
+    * 通过top/iostat/iotop/pidstat -> 找到热点进程
+        * strace追踪热点io函数
+            * strace -p <pid> -f -T -tt -> 追踪系统调用并打印时间
+                * -t -> 打印时间
+                * -tt -> 打印耗时
+            * strace -f -p 2249 -T -tt -e fdatasync -> 查看函数的调用频率
+                * -e -> 追踪特定的文件
+        * lsof 查看网络端口的连接二元组
+            * lsof -i
+                * 如果查看独立网络命名空间的容器，需要先进入容器的网络空间再进行查询
+                    * 使用nsenter进入某个网络命名空间
+            * 如何安装nsenter
+                * wget https://www.kernel.org/pub/linux/utils/util-linux/v2.24/util-linux-2.24.tar.gz
+                * tar -zxvf util-linux-2.24.tar.gz
+                * ./configure --without-python --disable-all-programs --enable-nsenter --without-ncurses
+                * make nsenter
+                * cp nsenter /usr/local/bin/
+            * 用nsenter进入容器的网络命名空间并执行lsof -i
+                * PID=$(docker inspect --format {{.State.Pid}} app)
+                * nsenter --target $PID --net -- lsof -i
+                * 查看指定fd对应的连接二元组
+        * 修改redis配置
+            * config set appendfsync everysec
+            * config get append*
+
+* redis的持久化策略及其区别
+    * RDB 
+        * 异步（fork进程）的方式刷盘
+        * 定时刷盘，通过save配置，key刷新频率越高，刷盘越快
+        * 优缺点
+            * 优点：保存全量数据，不会阻塞io线程，读写效率高
+            * 缺点: 持久化有延时，且耗时较长，数据可靠性较差
+    * AOF
+        * 通过fsync调用刷盘，存储操作
+        * 默认关闭，可通过设置appendonly yes 进行开启
+        * 通过appedfsync配置刷盘策略，包括always/everysec/no
+            * always -> 实时刷盘
+            * everysec -> 1s刷盘一次，可能丢失1s内的操作
+            * no -> 交给系统刷盘
+        * 优缺点
+            * 优点：数据实时性较好，可靠性高，可读性较好
+            * 缺点：
+                * 1 文件比较大，可通过rewrite重写操作的方式压缩；
+                * 2 fsync阻塞io线程，读写性能相对差一点
+                * 3 load 数据时需要重新执行operation，相对慢一点
+    * 最佳实践
+        * 不能只开启AOF
+        * 最好同时开启RDB和AOF
