@@ -1550,3 +1550,117 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
     * 最佳实践
         * 不能只开启AOF
         * 最好同时开启RDB和AOF
+
+#### [30 | 套路篇：如何迅速分析出系统I/O的瓶颈在哪里？](https://time.geekbang.org/column/article/79001)
+
+> 笔记
+
+* 有哪些指标可以评估IO性能
+    * 文件系统
+        * 容量/使用量/剩余空间
+            * 数据和元数据
+                * df -i 可查看inodes的容量和使用率
+        * 缓存
+            * page cache
+            * slab -> inodes/dentry
+                * slaptop
+            * 各个文件系统缓存
+                * 如何查看系统的文件系统类型？
+                    * df -T h  -> 显示文件系统类型
+                    * df -T . -> 查看当前目录的文件系统
+                    * df -T /proc -> 查看指定目录的文件系统
+       * iops/吞吐量 
+            * 可能无法直接观测
+    * 磁盘(iostat)
+       * 使用率
+            * 由于磁盘可以处理并行IO请求，使用率100%的情况下未必饱和
+       * iops
+       * 吞吐量
+       * 响应时间
+       * 缓存 -> buffer
+
+#### [31 | 套路篇：磁盘 I/O 性能优化的几个思路](https://time.geekbang.org/column/article/79368)
+
+> 笔记
+
+* 如何测试应用/文件/磁盘的io性能？
+    * 控制变量
+        * 读写模式：顺序读写/随机读写
+        * 并发请求数
+        * 同步模式：同步/异步
+        * 是否使用缓存
+    * 测试指标
+        * iops/吞吐量
+        * io delay
+    * 测试工具
+        * fio (测试文件或磁盘的io性能）
+            * 比较顺序读和随机读磁盘的性能
+                * 随机读：fio -name=randread -direct=1 -iodepth=64 -rw=randread -ioengine=libaio -bs=4k -size=1G -numjobs=1 -runtime=1000 -group_reporting -filename=/dev/vda1
+                    * -direct=1 跳过缓存
+                    * -rw=randread 随机读
+                    * -ioengine=libaio 异步IO
+                    * -iodepth=64 并发请求数
+                    * -bs=4k 每次请求4k
+                    * -size=1G 总共读1G的数据量
+                    * 返回指标
+                        * 吞吐量- 7.8M/s： bw (KiB/s): min= 2608, max= 9096, per=100.00%, avg=7820.35, stdev=499.94, samples=268
+                        * iops - 1955/s: iops: min=652, max=2274, avg=1955.08, stdev=124.98, samples=26
+                * 顺序读：fio -name=read -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=4k -size=1G -numjobs=1 -runtime=1000 -group_reporting -filename=/dev/vda1
+                    * 只需要调整遍历-rw=read 顺序度即可
+                    * 返回指标
+                        * 吞吐量-7.8M/s bw (  KiB/s): min= 6304, max= 9456, per=99.98%, avg=7878.68, stdev=193.70, samples=266 
+                        * iops - iops        : min= 1576, max= 2364, avg=1969.67, stdev=48.43, samples=266
+                * 比较随机读和顺序读，在ssd硬盘的情况下，差别不大(lfdisk -l)
+                    * 顺序读比随机读性能要略好一些
+
+* 如何优化IO性能
+    * 应用层
+        * 用追加写(顺序写）代替随机写
+        * 增加应用层缓存或利用系统缓存
+        * 频繁写同一块磁盘空间，使用mmap代替read/write减少内存拷贝
+            * mmap为什么能够减少内存拷贝？
+        * 写请求合并
+            * 例如利用fsync代替O_SYNC
+        * 资源隔离，为核心应用分配更多的io资源
+            * cgroup
+    * 文件系统层
+        * 选择合适的文件系统
+            * 例如可伸缩的ext4
+            * 适合大容量的xfs
+            * 不需要持久化时选择内存文件系统，例如tmpfs
+        * 优化文件系统配置选项
+            * 特性
+            * 日志模式
+            * 挂载选项
+        * 优化文件系统缓存
+    * 磁盘
+        * 换用性能更好的磁盘
+        * 使用RAID
+        * 根据业务场景选择适合的io调度算法
+        * 对数据进行磁盘隔离，例如为日志配置单独的磁盘
+        * 调整2个重要的内核参数
+            * /sys/block/vda/queue/read_ahead_kb -> 预读大小，顺序读多场景可以调大
+            * /sys/block/vda/queue/nr_requests -> io请求队列大小，适当调大可增加吞吐量
+
+
+#### [32 | 答疑（四）：阻塞、非阻塞 I/O 与同步、异步 I/O 的区别和联系](https://time.geekbang.org/column/article/79734)
+
+> 笔记
+
+* linux系统究竟有几种IO模型，有什么区别？
+    * 网络模型（4种）
+        * 同步阻塞
+            * 同步读，内核数据未ready时，阻塞，直到数据完全返回
+        * 同步非阻塞
+            * 内核数据未ready时，返回失败(不阻塞）
+            * 轮询的read
+            * 内核数据ready时，同步读（阻塞）
+        * 多路复用
+            * 基于select/poll/epoll同时对多个channel机械能select，发现ready的channel时，发起同步读，从硬件读取到用户空间(阻塞）
+        * 异步
+            * 发起读调用后立即返回，内核异步的读数据，通过回调函数通知用户进程
+            * 完全没有阻塞
+    * 磁盘IO模型
+        * 磁盘只有同步阻塞和异步两种模式
+            * 磁盘数据总是就绪的，同步读的时候不存读不到的情况，因此不存在同步非阻塞的说法
+            * select/poll/epoll是网络机制，和磁盘io无关，因此不存在多路复用模型
