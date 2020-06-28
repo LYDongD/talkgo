@@ -1724,4 +1724,50 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
         * socket buffer
 
 
+#### [34 | 关于 Linux 网络，你必须知道这些（下）](https://time.geekbang.org/column/article/81057)
+
+> 笔记
+
+* 如何衡量系统的网络性能？
+    * 带宽 -> ethtool
+        * ethtool eth0 | grep Speed
+    * 吞吐量 -> sar -n DEV 1
+    * pps -> sar -n DEV 1
+    * 延时 -> ping
+        * 通常指应用请求到收到响应的时间 (RTT)
+        * 也可能指tcp连接建立的时间
+       
+    * 连通性 -> ping
+    * 丢包率/重传率 -> ifconfig
+
+
+* 如何查看网卡/网络配置信息
+    * ifconfig <网卡>
+    * ip -s addr show dev <网卡>
+  
+* 如何查看系统当前连接(socket)信息
+    * 查看连接信息即查看socket信息，一个socket对应一个唯一的5元祖
+        * <protocol, source_ip, source_port, target_ip, target_port>
+    * 查看当前监听状态的tcp socket及其所属进程
+        * netstat -ntlp 
+        * ss -ntlp
+    * 查看协议栈的统计信息
+        * netstat -s
+        * ss -s
+
+* 如何理解netstat或ss输出的两个队列含义（Recv-Q和Send-Q)
+    * 可以参考这篇文章：http://jm.taobao.org/2017/05/25/525-1/
+        * 半连接队列(sync队列) -> 第一次握手(sync)后将连接放入sync队列 
+        * 全连接队列(accept队列) -> 第三次握手(ack) 后将连接放入accept队列
+            * Recv-Q 表示当前队列长度
+            * Send-Q 表示配置的最大长度
+                * 例如nginx默认是511
+            * Recv-Q > Send-Q 时，说明队列饱和，将发生overFlows
+                * netstat -s 可查看sync或accept队列溢出信息
+    * 半连接队列饱和
+        * 常见与sync flood攻击, 导致连接一直无法建立并影响正常连接
+    * 全连接队列饱和
+        * 如果Send-Q设置过小(例如java NIO 默认50），在并发连接较大时容易发生
+            * 饱和后默认丢弃ack包，客户端将按策略重传，超过一定时间关闭连接
+
 
