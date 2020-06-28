@@ -1769,5 +1769,81 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
     * 全连接队列饱和
         * 如果Send-Q设置过小(例如java NIO 默认50），在并发连接较大时容易发生
             * 饱和后默认丢弃ack包，客户端将按策略重传，超过一定时间关闭连接
+        * netty如何设置全连接队列长度？ -> BACKLOG
+            * .option(ChannelOption.SO_BACKLOG, 1024)
 
+#### [35 | 基础篇：C10K 和 C1000K 回顾](https://time.geekbang.org/column/article/81268)
 
+> 笔记
+
+* 为什么NIO中一个线程可以处理多个socket的读写事件？
+    * 依赖于操作系统的select/poll/epoll实现多路复用 -> 同时监听多个socket的状态
+        * select + 水平触发(at least once) -> 轮询，用位向量保存socket集合, socket表大小有限（1024)
+        * poll + 水平触发 -> 轮询，用无界数组保存socket集合,突破了socket表限制
+        * epoll + 边缘触发（at most once)  -> 非轮询，事件驱动，相比轮询减少了cpu的消耗
+    * 非阻塞
+        * 不会阻塞在无状态变化的socket，用一个或少量的线程去检查socket即可，释放其他线程资源去处理其他任务
+        * 应用层面，负责检查socket状态的线程可以是阻塞的(也可以是条件阻塞或不阻塞），直到有socket状态变化才返回
+
+* netty，nginx和tomcat的网络工作模型什么区别？即采用什么设计模式来实现多路复用?
+    * netty
+        * 主从Reactor多线程模式
+            * master reactor -> accept 处理连接事件，创建socket并注册到worker的selector当中
+            * worker reactor -> read/write，处理读写事件，并委派多线程处理读写请求
+        * 可配置BIO或NIO
+        * 架构可参考(https://juejin.im/post/5bea1d2e51882523d3163657)
+    * nginx
+        * master-workers 多进程模式
+            * master负责绑定并监听端口并创建works
+            * workers处理socket事件(连接,读写等）
+                * 发生连接请求时，workers如何分配来处理该连接事件
+                    * 锁(accept_mutex) -> 只有一个worker争抢到某个端口的新连接事件并将连接注册到自己的epoll
+                    * 无锁 -> 每个worker都处理连接事件并注册到各自的epoll 
+                    * REUSEPORT -> 一个端口创建多个socket，每个worker处理自己socket上的连接事件，由内核进行分配   
+    * tomcat 
+        * 类似主从Reactor多线程模式
+            * acceptor -> 处理连接事件，创建channel并注册到poller
+            * poller -> 处理读写事件，并委派线程池处理读写请求
+            * executor -> 处理读写请求
+    * 总结
+        * nginx是多进程模型，tomcat/netty都是多线程模型
+        * netty(main-sub reactor + 线程池）类比 tomcat(acceptor-poller + executer线程池）
+
+#### [36 | 套路篇：怎么评估系统的网络性能？](https://time.geekbang.org/column/article/81497)
+
+> 笔记
+
+* 如何测试网络协议栈的性能？
+    * 为什么要测试网络性能？
+        * 测试是评估当前性能的最好方式
+            * 通过压力测试获取系统指标的极限值
+            * 根据目标判断性能是否满足期望，并依次进行性能优化
+    * 分层测试，不同的协议层关心的指标不同，并且对应不同的测试工具和方法
+        * HTTP -> ab/jmeter/wrk
+            * 指标
+                * 吞吐量
+                * RT
+                * QPS
+                * 并发连接数
+            * 如何测试应用真实的性能表现？
+                * 模拟负载，在一定负载的情况下测试特定接口的性能
+                    * 如何模拟负载
+                        * wrk/jmeter等工具支持测试脚本，可在脚本内实现登录，施加负载等操作
+        * TCP -> iperf3
+            * 服务端：iperf3 -s -i 1 -p 10000
+                * -s  server 模式
+                * -i 间隔1s取一次数据
+                * -p 服务器监听端口
+            * 客户端: iperf3 -c 192.168.0.30 -b 1G -t 15 -P 2 -p 10000
+                * -c client模式
+                * -b 请求数据量
+                * -t 时间(s)
+                * -P 并发连接数
+                * -p 目标端口
+            * 指标
+                * 吞吐量
+        * 网络层/网络接口 -> pktgen
+            * 指标
+                * pps
+                * 吞吐量    
+            
