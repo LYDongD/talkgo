@@ -1968,7 +1968,7 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
         * 应用层对socket参数的设置都是通过系统调用来完成，因此可以通过strace追踪这些参数
 
 
-#### [41 | 案例篇：如何优化 NAT 性能？（上）](https://time.geekbang.org/column/article/83189)
+#### [41/42 | 案例篇：如何优化 NAT 性能?](https://time.geekbang.org/column/article/83189)
 
 > 笔记
 
@@ -1994,7 +1994,35 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
                 * input/output/forward 链
             * nat -> 配置NAT ip映射路由
                 * prerouting/postrouting/output
+                * 查看nat配置：iptables -nL -t nat
             * mangle -> 修改分组数据
             * raw
+
+        * 配置
+            * SNAT
+                * iptables -t nat -A POSTROUTING -s 192.168.0.0/16 -j MASQUERADE
+                * iptables -t nat -A POSTROUTING -s 192.168.0.2 -j SNAT --to-source 100.100.100.100
+            * DNAT
+                * iptables -t nat -A PREROUTING -d 100.100.100.100 -j DNAT --to-destination 192.168.0.2
+            * SNAT+DNAT
+                * iptables -t nat -A POSTROUTING -s 192.168.0.2 -j SNAT --to-source 100.100.100.100
+                * iptables -t nat -A PREROUTING -d 100.100.100.100 -j DNAT --to-destination 192.168.0.2
+            * 开启ip转发
+                * sysctl net.ipv4.ip_forward
+                * sysctl -w net.ipv4.ip_forward=1
+
+* 什么可能引起NAT的性能问题？
+    * NAT底层依赖内核的连接跟踪机制：conntrack
+        * 查看关键配置 -> sysctl -a | grep conntrack
+            * net.netfilter.nf_conntrack_count，表示当前连接跟踪数；
+            * net.netfilter.nf_conntrack_max，表示最大连接跟踪数；
+            * net.netfilter.nf_conntrack_buckets，表示连接跟踪表的大小
+    * 当前连接超过连接跟踪数会发生什么问题？
+        * 错误日志 -> dmesg查看
+            * nf_conntrack: table full
+        * 性能问题
+            * NAT等待连接跟踪释放导致延时增加
+
+ 
         
-     
+        
