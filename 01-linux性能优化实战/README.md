@@ -1846,4 +1846,180 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
             * 指标
                 * pps
                 * 吞吐量    
+
+#### [37 | 案例篇：DNS 解析时快时慢，我该怎么办？](https://time.geekbang.org/column/article/81850)
+
+> 笔记
+
+* 如何查看域名解析的过程
+    * dig +trace
+        * 其他查看域名解析的方法
+            * ping 
+            * nslookup
+    * 域名是如何解析的？
+        * 从ROOT服务开始递归的解析
+        * 请求域名服务器，返回下一级域名的地址
+        * 最后一级域名服务器返回A地址(ip)
+
+* 如何配置域名服务器和本地域名映射
+    * vim /etc/hosts -> 配置本地域名映射
+    * vim /etc/resolve.conf -> 配置域名服务器
+        * 如果没有配置会怎么样？
+            * 默认会连接本地127.0.0.1:53端口，导致连接超时
+            * nslookup -debug 可查看请求的域名服务器地址
+
+* 请求延时较大时如何排除是否为dns问题？
+    * ping -c3 -> 排查域名服务器网络连通性以及延时
+        * 延时是否合理，比如超过100ms属于延时较长的情况
+        * 是否出现丢包，可能导致域名解析不稳定
+    * 解决方案
+        * 更换域名服务器
+        * 使用域名服务器本地代理
+            * 具有缓存功能
+            * dnsmasq -> 启动本地域名服务器
+            * echo "nameserver 127.0.0.1" > /etc/resolve.conf -> 指定请求本地域名服务器
+                * 本地没有缓存时，dnsmasq会请求远程域名服务器拉取地址并缓存
+
+#### [38 | 案例篇：怎么使用 tcpdump 和 Wireshark 分析网络流量](https://time.geekbang.org/column/article/82321)
+
+> 笔记
+
+* 如何进行网络延时问题分析？
+    * 基于特定连接分析包传输情况
+        * 连接是否正常（状态，连接数）
+        * 包传输是否正常
+            * 是否有丢包或包未响应情况
+            * 包传输的延时
+    * tcpdump + wireshark 
+        * tcpdump 服务器抓包
+            * 例如抓取ping通信包，包括dns域名解析和icmp通信
+                * udp协议/目标53端口，域名ip地址：35.190.27.188
+                * tcpdump -nn udp port 53 or host 35.190.27.188
+                    * -nn 禁用反向解析，例如将53端口解析为dns
+            * tcp包含哪些信息
+                * 连接5元祖
+                * 网络包
+                * 时间戳 协议 源地址.源端口 > 目的地址.目的端口 网络包详细信息
+        * wireshark 基于tcpdump包在本地进行可视化分析
+            * 使用tcpdump -w xxx.pcap 导出连接网络包信息到文件
+            * 导入wireshark进行分层分析 
+                * 网络层：源和目标的ip地址
+                * 连接层：tcp/udp包，源和目标端口
+                * 应用层：http/dns包
+
+* 通过wireshark分析发现tcp连接网络包并不符合四次挥手模型，为什么？
+    * 4次挥手中，服务端的连接状态分别是：established -> closed_wait -> last_ack -> closed
+        * 服务端收到FIN包后，关闭之前需要处理当前连接，因此需要closed_wait这样一个过渡状态，当连接清理完毕后发送FIN包（第三次挥手）
+            * 如果服务端当前没有连接资源需要处理，可直接关闭，状态机调整为：established -> last_ack -> closed, 减少中间等待关闭的状态
+                * 服务端接收到FIN后，直接响应FIN && ACK, 而不是分成2次握手处理
+
+#### [39 | 案例篇：怎么缓解 DDoS 攻击带来的性能下降问题？](https://time.geekbang.org/column/article/82573)
+
+> 笔记
+
+* Ddos攻击的原理是什么？
+    * 通过模拟大量分布式客户端请求，耗尽服务端资源，使其不能正常或为正常连接提供服务
+        * 耗尽带宽
+        * 耗尽操作系统资源 
+            * 硬件资源: cpu/内存/IO
+            * 软件资源：fd, 线程池，连接池等
+    * 如何模拟dos工具
+        * hping3 -> 基于tcp协议的客户端
+            * 可模拟syn flood攻击
+                * sync flood 通过不回复last ack 包使大量连接处于半连接状态（SYNC_RECIEVED)
+                * 当半连接队列饱和，无法接收新的连接
+                    * 调整半连接队列的大小 -> sysctl -w net.ipv4.tcp_max_syn_backlog=1024
+                    * 不维护半连接状态，开启syn cookies -> sysctl -w net.ipv4.tcp_syncookies=1        
+                    * 在/etc/sysctl.conf维护持久化配置
             
+* 如何排查网络问题
+    * 宏观的看网络情况 -> rx和tx的的bps/pps/带宽使用率
+        * sar -n DEV 1
+    * 查看socket使用情况 
+        * ss/netstat
+    * 查看网络连接和通信报文
+        * tcpdump + wireshark
+        
+#### [40 | 案例篇：网络请求延迟变大了，我该怎么办？](https://time.geekbang.org/column/article/82833)
+
+> 笔记
+
+* 如何确定延时是因为网络问题？
+    * 测试单次请求的网络延时
+        * ping
+        * hping3
+            * 测试指定主机删8080端口的请求延时
+                * hping3 -c 3 -S -p 8080 192.168.0.30
+    * 测试并发请求的网络延时
+        * wrK
+            * 测试80端口100个并发请求的网络延时
+                * wrk --latency -c 100 -t 2 --timeout 2 http://192.168.0.30/
+
+* 如何分析网络延时问题？
+    * traceroute -> 查看路由和网关延时
+    * tcpdump/wireshark -> 查看网络包收发是否正常以及延时   
+        * tcpdump -nn tcp port 8080 -w nginx.pcap
+        * 将nginx.pcap导入wireshark进行分析
+            * 查看网络包的延时情况
+                * 例如ACK包延时，可能开启了延时确认
+    * strace查看socket相关的系统调用是否正常
+        * 追踪客户端是否开启了延时确认（系统调用创建socket时是否设置了延时确认参数）
+            * strace -f wrk --latency -c 100 -t 2 --timeout 2 http://192.168.0.30:8080/
+        * 应用层对socket参数的设置都是通过系统调用来完成，因此可以通过strace追踪这些参数
+
+
+#### [41/42 | 案例篇：如何优化 NAT 性能](https://time.geekbang.org/column/article/83189)
+
+> 笔记
+
+* 什么是NAT -> network address translation (ip地址映射器）
+    * 分类
+        * 静态NAT -> 内网ip与公网ip是一一映射关系
+            * 例如阿里云的机器同时有一个唯一的公网ip和内网ip
+        * 动态NAT -> 内网ip从公网ip池中，动态选一个进行映射
+        * NAPT -> 内网映射到一个公网ip的不同端口(端口映射）
+            * 多个内网ip共享一个公网ip (例如fc的内网机房架构）
+            * SNAT
+                * 内网机器访问外网时，目标ip地址不变，内网ip替换成公网ip和不同的端口
+            * DNAT
+                * 访问内网机器时，替换公网的目标IP和端口为内网ip
+            * SNAT + DNAT   
+                * 发包：SNAT
+                * 收包: DNAT
+
+* 如何对NAT进行修改和过滤
+    * iptables -> 支持4表5链
+        * 4表5链
+            * filter -> 防火墙，限制连接
+                * input/output/forward 链
+            * nat -> 配置NAT ip映射路由
+                * prerouting/postrouting/output
+            * mangle -> 修改分组数据
+            * raw
+        
+    * 如何实现SNAT和DNAT配置
+        * SNAT
+            * iptables -t nat -A POSTROUTING -s 192.168.0.0/16 -j MASQUERADE
+            * iptables -t nat -A POSTROUTING -s 192.168.0.2 -j SNAT --to-source 100.100.100.100
+        * DNAT
+            * iptables -t nat -A PREROUTING -d 100.100.100.100 -j DNAT --to-destination 192.168.0.2
+        * 双向
+            * iptables -t nat -A POSTROUTING -s 192.168.0.2 -j SNAT --to-source 100.100.100.100
+            * iptables -t nat -A PREROUTING -d 100.100.100.100 -j DNAT --to-destination 192.168.0.2
+        * 需要确保开启转发包功能
+            * sysctl net.ipv4.ip_forward 查看
+            * sysctl -w net.ipv4.ip_forward=1 开启 
+                * 持久化写入:/etc/sysctl.conf
+
+* NAT的实现原理和可能引发性能问题的地方
+    * nat基于内核的连接跟踪机制(conntrack)实现
+        * sysctl -a | grep conntrack
+            * net.netfilter.nf_conntrack_count -> 表示当前连接跟踪数
+            * net.netfilter.nf_conntrack_max -> 表示最大连接跟踪数
+            * net.netfilter.nf_conntrack_buckets -> 表示连接跟踪表的大小
+        * 如何发现因为资源饱和发生的错误日志
+            * dmesg
+                * 例如当nf_conntrack满时（nf_conntrack: table full），会打错误日志，通过dmesg可查看
+            * 当并发连接数超过连接跟踪数最大限制时，会引发性能问题
+       
+
