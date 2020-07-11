@@ -2043,3 +2043,120 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
             * 半连接/全连接长度
             * tcp延时ack配置等
     
+#### [44 | 套路篇：网络性能优化的几个思路（下）](https://time.geekbang.org/column/article/84003)
+
+> 分层优化
+    * 应用层
+    * socket层
+    * 连接层
+        * tcp -> 查看内核选项（sysctl -a | grep tcp) -> 修改：/etc/sysctl.conf
+            * 增加软资源上限 -> 支持更多的连接
+                * net.ipv4.tcp_max_tw_buckets -> 增大time_wait连接数数量
+                * net.netfilter.nf_conntrack_max -> 增大连接跟踪表大小
+                * net.ipv4.ip_local_port_range -> 增大本地端口范围
+                * net.ipv4.tcp_tw_reuse -> 连接端口复用（针对time_wait占用过多)
+                * net.ipv4.tcp_max_syn_backlog -> 增大半连接队列大小
+                * net.ipv4.tcp_syncookies -> 不限制半连接数量
+                * 文件打开数量限制 (ulimit -n 快速查看用户进程限制）
+                    * /proc/sys/fs/file-max -> 系统级别限制
+                    * /proc/sys/fs/nr_open -> 进程级别限制
+                    * /etc/security/limits.conf -> 用户界别进程限制
+            * 减少超时重试等待
+                * net.ipv4.tcp_fin_timeout -> time_wait_2 到 time_wait的时间 = 2MSL / 2 = 60s
+                * net.netfilter.nf_conntrack_tcp_timeout_time_wait
+                * net.ipv4.tcp_synack_retries -> 减少三次握手中sync-ack的重试次数
+            * 长连接优化
+                * net.ipv4.tcp_keepalive_time -> 缩短最后一次数据包到探测包的时间
+                * net.ipv4.tcp_keepalive_intvl -> 缩短探测包的世界
+                * net.ipv4.tcp_keepalive_probes -> 减少tcp探测失败后重试的次数                
+        * udp
+            * 缓冲
+            * 本地端口号范围
+            * 根据MTU挑战数据包大小，避免分片
+    * 网络层
+        * 路由和转发
+            * net.ipv4.ip_forward = 1 -> 开启IP转发，支持NAT
+            * net.ipv4.ip_default_ttl -> 调整包的生存周期，增大该值会降低系统性能
+            * net.ipv4.conf.eth0.rp_filter -> 开启反向地址校验，防止伪IP
+        * 分片
+            * 调整MTU -> 在不同情况下，增大或减少MTU
+                * ifconfig 查看mtu -> 默认1500
+        * 安全
+            * net.ipv4.icmp_echo_ignore_all -> 禁用icmp
+            * net.ipv4.icmp_echo_ignore_broadcasts -> 禁止广播icmp
+    * 网络接口层（链路层）
+        * 软中断优化
+            * smp_affinity -> cpu亲和性
+            * RPS/RFS -> 调度到相同的cpu，增加缓存命中率
+        * 软件处理转移为硬件处理 -> 让网卡做更多的事儿
+            * TSO/UFO
+            * GSO
+            * LRO
+            * GRO
+            * RSS
+            * VXLAN
+        * 网络接口
+            * 单队列 -> 多队列
+            * 增大缓冲区大小和队列长度
+            * traffic control -> 为不同流量配置qps 
+        * 绕过网络协议栈 -> 解决单机C10M问题
+            * DPDK/XDP
+
+
+#### [45 | 答疑（五）：网络收发过程中，缓冲区位置在哪里？](https://time.geekbang.org/column/article/84529)
+
+> 网络接收过程中涉及哪些缓存，它们与buffer/cache的关系是什么？
+
+* 网卡 -> DMA -> 环形队列(ring buffer) -> 硬中断 -> sk_buffer(双向链表）-> socket缓冲区 -> 应用
+    * 涉及3个缓存，它们都是由slab管理，即属于cache，不属于buffer(块设备缓存）
+        * cache包括page cache和slab可回收部分
+    * 应用层是面向socket处理数据包的发送和接收
+        * 发送消息 -> 将消息写入socket buffer
+        * 接收消息 -> 从socket buffer 读取消息
+        * 读写都依赖socket buffer，因此buffer的大小会影响网络性能
+
+> SNAT中的MASQUERADE，出网时多个内网ip:port映射为相同的公网ip, 那么响应时是如何实现反向映射的？
+
+* SNAT通过contrack机制维护连接状态，每个连接都是一个5元祖，内网ip不同因此连接不同，出网时不会冲突
+* SNAT将内网转换为公网时，为了保证端口不冲突，会重新分配端口后，这样反向映射可以根据不同端口找到对应的内网ip
+    * 由于需要重新分配公网端口，而端口是有限的，因此限制了整体出网的连接数
+
+
+#### [46 | 案例篇：为什么应用容器化后，启动慢了很多？](https://time.geekbang.org/column/article/84953)
+
+> 如何为容器分配系统资源
+    * docker run --name tomcat --cpus 0.1 -m 512M -p 8080:8080 -itd feisky/tomcat:8
+        * --cpu 限制cpu的核心数
+        * --cpu_share 限制cpu使用比例
+        * -m 限制内存
+        * --blkio-weight 限制block权重
+        * --device-read-bps/--device-write-bps 限制读写频率
+    * 以上参数本质上是修改docker的cgroup文件
+        * /sys/fs/cgroup/cpu/docker/d93c9a660f4a13789d995d56024f160e2267f2dc26ce676daa66
+        * /sys/fs/cgroup/memory/docker/b067fa0c58dcdd4fa856177fac0112655b605fcc9a0fe07e3695
+        * /sys/fs/cgroup/blkio/docker/1402c1682cba743b4d80f638da3d4272b2ebdb6dc6c2111acfe
+
+> 如何查看docker容器异常退出的原因
+    * 查看日志：docker logs -f <container_name>
+    * 查看容器状态：docker inspect <container_name> -f '{{json .State}}' | jq
+        * jq是json格式化工具，可以不加
+        * -f 利用go template机制进行匹配提取
+        * 如果容器退出，会显示退出状态和退出原因，例如OOM
+
+```
+{
+  "Status": "exited",
+  "Running": false,
+  "Paused": false,
+  "Restarting": false,
+  "OOMKilled": true,
+  "Dead": false,
+  "Pid": 0,
+  "ExitCode": 137,
+  "Error": "",
+  "StartedAt": "2020-07-11T07:28:25.600714956Z",
+  "FinishedAt": "2020-07-11T07:32:06.329618331Z"
+}
+
+```
+    * 通过dmesg查看 -> 磁盘满，内存泄露时的错误日志都可以通过dmesg查看
