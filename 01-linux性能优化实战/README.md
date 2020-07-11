@@ -2142,6 +2142,9 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
         * jq是json格式化工具，可以不加
         * -f 利用go template机制进行匹配提取
         * 如果容器退出，会显示退出状态和退出原因，例如OOM
+    * 通过dmesg查看 -> 磁盘满，内存泄露时的错误日志都可以通过dmesg查看
+
+容器状态查看: 
 
 ```
 {
@@ -2159,4 +2162,61 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
 }
 
 ```
-    * 通过dmesg查看 -> 磁盘满，内存泄露时的错误日志都可以通过dmesg查看
+dmesg oom 日志：
+
+```
+Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, anon-rss:516680kB, file-rss:14264kB, shmem-rss:0kB, UID:0 pgtables:1440kB oom_score_adj:0
+
+```
+1 java进程发生oom killed, 原因是cgroup内存限制
+2 系统虚拟内存约为3.5G，匿名常驻约516M，文件常驻内存1.4M， 两者之和超过了内存限制的512M
+    * 匿名内存（anon-rss): 进程动态申请的内存
+
+> 原因分析
+
+对于java进程来说，堆限制了anon-rss的大小。如果堆的大小 > 容器资源的大小，那么有可能发生oom
+
+因此堆的限制要和容器资源限制相匹配
+
+* 如何查看jvm的堆参数
+    * java -XX:+PrintFlagsFinal | grep <key-world>
+
+> 番外 - 升级sysstat
+
+1. 移除旧版本：yum remove sysstat
+2. 下载最新版本源码包 [sysstat](http://sebastien.godard.pagesperso-orange.fr/download.html?spm=a2c4e.10696291.0.0.338a19a4eJe4j1)
+3. 压缩，编译，构建
+    * tar -xvf xxx
+    * ./configure
+    * make
+4. 添加环境变量
+    * export SYSSTA_HOME=/root/sysstat-11.6.0
+    * export PATH=$PATH:$SYSSTA_HOME
+5. 查看当前版本: sar -V
+
+#### [47/48 | 案例篇：服务器总是时不时丢包，我该怎么办？](https://time.geekbang.org/column/article/85201)
+
+> 分层丢包分析
+
+* 按照网络协议栈分层分析：(自下而上) 
+    * 通道 -> 网络拥塞, 线路错误
+    * 网卡 -> ring buffer 溢出
+        * netstat -i 统计网卡/ring buffer 丢包
+    * 链路层 -> 网络帧(mac地址）校验失败，Qos
+    * ip层 -> 路由失败，组包超mtu
+        * netstat -i -> 关注MTU大小
+            * ifconfig eth0 mtu 1500 -> 调整mtu大小，太小可能会发生超限丢包
+    * 连接层 -> 端口未监听，内核资源受限（例如连接状态表，fd, 端口数等）
+        * netstat -s -> 统计tcp/udp/icmp/ip的网络收发汇总情况，包括丢包
+    * iptables(横跨网络和连接层) -> 过滤(防火墙）和修改（nat)
+        * 连接跟踪数饱和导致丢包 (比较当前连接跟踪和最大连接跟踪数）
+            * sysctrl -a | grep netfilter | grep max
+            * sysctrl -a | grep netfilter | grep count
+        * filter -> 添加了过滤规则导致包主动丢弃
+            * iptables -t filter -nvL
+            * 删除错误规则：iptables -t filter -D INPUT -m statistic --mode random --probability 0.30 -j DROP
+                * 删除filter表input链中，模块为statistic, 模式为随机30% drop包的规则
+    * socket层 -> 缓冲区溢出
+    * 应用层 -> app异常
+
+
