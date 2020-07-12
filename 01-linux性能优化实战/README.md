@@ -2046,61 +2046,62 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
 #### [44 | 套路篇：网络性能优化的几个思路（下）](https://time.geekbang.org/column/article/84003)
 
 > 分层优化
-    * 应用层
-    * socket层
-    * 连接层
-        * tcp -> 查看内核选项（sysctl -a | grep tcp) -> 修改：/etc/sysctl.conf
-            * 增加软资源上限 -> 支持更多的连接
-                * net.ipv4.tcp_max_tw_buckets -> 增大time_wait连接数数量
-                * net.netfilter.nf_conntrack_max -> 增大连接跟踪表大小
-                * net.ipv4.ip_local_port_range -> 增大本地端口范围
-                * net.ipv4.tcp_tw_reuse -> 连接端口复用（针对time_wait占用过多)
-                * net.ipv4.tcp_max_syn_backlog -> 增大半连接队列大小
-                * net.ipv4.tcp_syncookies -> 不限制半连接数量
-                * 文件打开数量限制 (ulimit -n 快速查看用户进程限制）
-                    * /proc/sys/fs/file-max -> 系统级别限制
-                    * /proc/sys/fs/nr_open -> 进程级别限制
-                    * /etc/security/limits.conf -> 用户界别进程限制
-            * 减少超时重试等待
-                * net.ipv4.tcp_fin_timeout -> time_wait_2 到 time_wait的时间 = 2MSL / 2 = 60s
-                * net.netfilter.nf_conntrack_tcp_timeout_time_wait
-                * net.ipv4.tcp_synack_retries -> 减少三次握手中sync-ack的重试次数
-            * 长连接优化
-                * net.ipv4.tcp_keepalive_time -> 缩短最后一次数据包到探测包的时间
-                * net.ipv4.tcp_keepalive_intvl -> 缩短探测包的世界
-                * net.ipv4.tcp_keepalive_probes -> 减少tcp探测失败后重试的次数                
-        * udp
-            * 缓冲
-            * 本地端口号范围
-            * 根据MTU挑战数据包大小，避免分片
-    * 网络层
-        * 路由和转发
-            * net.ipv4.ip_forward = 1 -> 开启IP转发，支持NAT
-            * net.ipv4.ip_default_ttl -> 调整包的生存周期，增大该值会降低系统性能
-            * net.ipv4.conf.eth0.rp_filter -> 开启反向地址校验，防止伪IP
-        * 分片
-            * 调整MTU -> 在不同情况下，增大或减少MTU
-                * ifconfig 查看mtu -> 默认1500
-        * 安全
-            * net.ipv4.icmp_echo_ignore_all -> 禁用icmp
-            * net.ipv4.icmp_echo_ignore_broadcasts -> 禁止广播icmp
-    * 网络接口层（链路层）
-        * 软中断优化
-            * smp_affinity -> cpu亲和性
-            * RPS/RFS -> 调度到相同的cpu，增加缓存命中率
-        * 软件处理转移为硬件处理 -> 让网卡做更多的事儿
-            * TSO/UFO
-            * GSO
-            * LRO
-            * GRO
-            * RSS
-            * VXLAN
-        * 网络接口
-            * 单队列 -> 多队列
-            * 增大缓冲区大小和队列长度
-            * traffic control -> 为不同流量配置qps 
-        * 绕过网络协议栈 -> 解决单机C10M问题
-            * DPDK/XDP
+
+* 应用层
+* socket层
+* 连接层
+    * tcp -> 查看内核选项（sysctl -a | grep tcp) -> 修改：/etc/sysctl.conf
+        * 增加软资源上限 -> 支持更多的连接
+            * net.ipv4.tcp_max_tw_buckets -> 增大time_wait连接数数量
+            * net.netfilter.nf_conntrack_max -> 增大连接跟踪表大小
+            * net.ipv4.ip_local_port_range -> 增大本地端口范围
+            * net.ipv4.tcp_tw_reuse -> 连接端口复用（针对time_wait占用过多)
+            * net.ipv4.tcp_max_syn_backlog -> 增大半连接队列大小
+            * net.ipv4.tcp_syncookies -> 不限制半连接数量
+            * 文件打开数量限制 (ulimit -n 快速查看用户进程限制）
+                * /proc/sys/fs/file-max -> 系统级别限制
+                * /proc/sys/fs/nr_open -> 进程级别限制
+                * /etc/security/limits.conf -> 用户界别进程限制
+        * 减少超时重试等待
+            * net.ipv4.tcp_fin_timeout -> time_wait_2 到 time_wait的时间 = 2MSL / 2 = 60s
+            * net.netfilter.nf_conntrack_tcp_timeout_time_wait
+            * net.ipv4.tcp_synack_retries -> 减少三次握手中sync-ack的重试次数
+        * 长连接优化
+            * net.ipv4.tcp_keepalive_time -> 缩短最后一次数据包到探测包的时间
+            * net.ipv4.tcp_keepalive_intvl -> 缩短探测包的世界
+            * net.ipv4.tcp_keepalive_probes -> 减少tcp探测失败后重试的次数                
+    * udp
+        * 缓冲
+        * 本地端口号范围
+        * 根据MTU挑战数据包大小，避免分片
+* 网络层
+    * 路由和转发
+        * net.ipv4.ip_forward = 1 -> 开启IP转发，支持NAT
+        * net.ipv4.ip_default_ttl -> 调整包的生存周期，增大该值会降低系统性能
+        * net.ipv4.conf.eth0.rp_filter -> 开启反向地址校验，防止伪IP
+    * 分片
+        * 调整MTU -> 在不同情况下，增大或减少MTU
+            * ifconfig 查看mtu -> 默认1500
+    * 安全
+        * net.ipv4.icmp_echo_ignore_all -> 禁用icmp
+        * net.ipv4.icmp_echo_ignore_broadcasts -> 禁止广播icmp
+* 网络接口层（链路层）
+    * 软中断优化
+        * smp_affinity -> cpu亲和性
+        * RPS/RFS -> 调度到相同的cpu，增加缓存命中率
+    * 软件处理转移为硬件处理 -> 让网卡做更多的事儿
+        * TSO/UFO
+        * GSO
+        * LRO
+        * GRO
+        * RSS
+        * VXLAN
+    * 网络接口
+        * 单队列 -> 多队列
+        * 增大缓冲区大小和队列长度
+        * traffic control -> 为不同流量配置qps 
+    * 绕过网络协议栈 -> 解决单机C10M问题
+        * DPDK/XDP
 
 
 #### [45 | 答疑（五）：网络收发过程中，缓冲区位置在哪里？](https://time.geekbang.org/column/article/84529)
@@ -2125,24 +2126,26 @@ ps: 使用率100%的磁盘可能仍未饱和，例如并行的io，即使单个i
 #### [46 | 案例篇：为什么应用容器化后，启动慢了很多？](https://time.geekbang.org/column/article/84953)
 
 > 如何为容器分配系统资源
-    * docker run --name tomcat --cpus 0.1 -m 512M -p 8080:8080 -itd feisky/tomcat:8
-        * --cpu 限制cpu的核心数
-        * --cpu_share 限制cpu使用比例
-        * -m 限制内存
-        * --blkio-weight 限制block权重
-        * --device-read-bps/--device-write-bps 限制读写频率
-    * 以上参数本质上是修改docker的cgroup文件
-        * /sys/fs/cgroup/cpu/docker/d93c9a660f4a13789d995d56024f160e2267f2dc26ce676daa66
-        * /sys/fs/cgroup/memory/docker/b067fa0c58dcdd4fa856177fac0112655b605fcc9a0fe07e3695
-        * /sys/fs/cgroup/blkio/docker/1402c1682cba743b4d80f638da3d4272b2ebdb6dc6c2111acfe
+
+* docker run --name tomcat --cpus 0.1 -m 512M -p 8080:8080 -itd feisky/tomcat:8
+    * --cpu 限制cpu的核心数
+    * --cpu_share 限制cpu使用比例
+    * -m 限制内存
+    * --blkio-weight 限制block权重
+    * --device-read-bps/--device-write-bps 限制读写频率
+* 以上参数本质上是修改docker的cgroup文件
+    * /sys/fs/cgroup/cpu/docker/d93c9a660f4a13789d995d56024f160e2267f2dc26ce676daa66
+    * /sys/fs/cgroup/memory/docker/b067fa0c58dcdd4fa856177fac0112655b605fcc9a0fe07e3695
+    * /sys/fs/cgroup/blkio/docker/1402c1682cba743b4d80f638da3d4272b2ebdb6dc6c2111acfe
 
 > 如何查看docker容器异常退出的原因
-    * 查看日志：docker logs -f <container_name>
-    * 查看容器状态：docker inspect <container_name> -f '{{json .State}}' | jq
-        * jq是json格式化工具，可以不加
-        * -f 利用go template机制进行匹配提取
-        * 如果容器退出，会显示退出状态和退出原因，例如OOM
-    * 通过dmesg查看 -> 磁盘满，内存泄露时的错误日志都可以通过dmesg查看
+
+* 查看日志：docker logs -f <container_name>
+* 查看容器状态：docker inspect <container_name> -f '{{json .State}}' | jq
+    * jq是json格式化工具，可以不加
+    * -f 利用go template机制进行匹配提取
+    * 如果容器退出，会显示退出状态和退出原因，例如OOM
+* 通过dmesg查看 -> 磁盘满，内存泄露时的错误日志都可以通过dmesg查看
 
 容器状态查看: 
 
