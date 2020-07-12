@@ -2220,3 +2220,74 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
     * 应用层 -> app异常
 
 
+#### [49 | 案例篇：内核线程 CPU 利用率太高，我该怎么办？](https://time.geekbang.org/column/article/86330)
+
+> top命令如何进行过滤
+
+* o -> 输入过滤条件，例如COMMAND=soft
+* ctrl o -> 查看当前过滤条件
+* = -> 清除过滤条件
+
+> 如何查找内核线程
+
+* 根据内核线程的管理进程查找
+    * 3个特殊进程
+        * 0号进程 -> idle进程，负责创建1号和2号进程
+        * 1号进程 -> systemd进程，用户态运行，负责管理其他用户态进程
+        * 2号进程 -> kthreadd进程, 内核态运行，负责管理其他内核线程
+    * 通过2号进程找到其管理的内核线程
+        * ps -f -ppid 2 -p 2
+            * -ppid 列出父进程的所有子进程
+
+* 常见的内核线程
+    * ksoftirqd -> 处理软中断
+    * kswapd0 -> 处理内存swap
+    * migration -> 进程迁移
+    * jbd2 -> 文件系统日志管理
+    * pdflush -> 脏页刷盘
+
+> 如何分析内核线程调用栈
+
+* 基于perf生成火焰图
+    * 生成报告：perf record -a -g -p 9
+    * 查看:perf report
+    * 根据报告生成火焰图
+        * git clone https://github.com/brendangregg/FlameGraph -> 下载火焰图工具
+        * perf script -i ./perf.data | ./stackcollapse-perf.pl --all |  ./flamegraph.pl > ksoftirqd.svg 
+            * perf script 将报告转化成可读采样记录
+            * stackcollapse-perf.pl 合并调用栈
+            * ./flamegraph.pl 生成火焰图 -> ksoftirqd.svg 在浏览器中打开
+    * 火焰图分类
+        * cpu火焰图（默认）
+            * on-cpu
+            * off-cpu
+            * 冷-热火焰图（结合on-off cpu)
+        * 内存火焰图
+            * 例如：perf record -e syscalls:sys_enter_mmap -a -g -- sleep 60
+                * 增加内存相关事件的系统调用采样
+        * 查分火焰图
+    * 如何分析火焰图
+        * 横轴代表cpu占用时间，越长则代表占用比例越高，即为热点函数
+        * 纵轴为调用栈，自下而上调用
+        * 点击指定函数可向上展开对应的调用栈
+
+#### [50 | 案例篇：动态追踪怎么用？（上）](https://time.geekbang.org/column/article/86490)
+
+> 什么是动态追踪？
+
+类比pinpoint这类面向应用的链路追踪工具，动态追踪即动态无侵入的采集特定函数或事件的数据，包括函数调用栈等
+
+* 追踪 = 数据采集（探针）+ 数据存储（hbase等） + 数据展示（web)
+    * 系统动态追踪探针
+        * 静态探针
+            * 类似于提前在代码中埋点，实现定义好并编译到运行时
+                * 可通过开关开启或关闭
+        * 动态探针
+            * 无需事先定义，可动态添加，例如pinpoint agent属于动态探针
+        * 硬件事件
+            * cpu缓存/指令周期/分支预测等事件
+
+* 内核提供的动态追踪机制
+    * perf
+    * ftrace
+    * eBPF
