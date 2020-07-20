@@ -2390,47 +2390,47 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
 > 如何做系统监控
 
 * 监控什么 -> 监控哪些系统的哪些指标
-	    * 系统监控(USE) = 硬资源（cpu等） + 软资源（fd数，连接表大小,socket buffer等）
-	        * 系统资源 -> 一下三个指标升高说明可能存在系统资源瓶颈
-	        	* 使用率
-	    	    * 饱和度
-	    	    * 错误数
-	    * 应用 = 指标 + 指标上下文
-	        * 健康
-	    	    * 心跳（测试页）
-	        * 接口 -> sentinel + TSDB + grafana
-	    	    * qps
-	    	    * rt
-                * 错误数
-	        * jvm -> promethus + grafana
-	    	    * 内存
-	    	    * gc
-	    	    * 线程
-	        * pod（进程）资源 -> promethus + grafana
-	    	    * cpu
-	        	* 内存
-	    	    * 网络
-	    	    * 磁盘IO
-	        * 日志 -> filebeat + elk
-	    	    * 错误日志
-	    	    * 将traceId打印到日志
-	        * 链路 -> pinpoint
-	    	    * 服务拓扑
-	    	    * 代码链
-	        * 业务 -> zabbix + grafana
-	            * 读数据库
-	            * 读日志
-	    * 中间件/数据库 -> zabbix + grafana
-	        * 系统资源
-	        * 专门的监控系统
-	    	    * redis -> rediscloud
-	    	    * kafka -> kafkaManager
-	    	    * dubbo -> dubbo admin
-	    	    * sentinel -> sentinel dashboard
-	    	    * elastic-job -> elastic-job dashboard
-	    	    * es -> ?
-    * 如何监控 -> 如何实现一个监控系统
-    	* 数据采集
+	* 系统监控(USE) = 硬资源（cpu等） + 软资源（fd数，连接表大小,socket buffer等）
+	    * 系统资源 -> 一下三个指标升高说明可能存在系统资源瓶颈
+	    	* 使用率
+		    * 饱和度
+		    * 错误数
+	* 应用 = 指标 + 指标上下文
+	    * 健康
+		    * 心跳（测试页）
+	    * 接口 -> sentinel + TSDB + grafana
+		    * qps
+		    * rt
+            * 错误数
+	    * jvm -> promethus + grafana
+		    * 内存
+		    * gc
+		    * 线程
+	    * pod（进程）资源 -> promethus + grafana
+		    * cpu
+	    	* 内存
+		    * 网络
+		    * 磁盘IO
+	    * 日志 -> filebeat + elk
+		    * 错误日志
+		    * 将traceId打印到日志
+	    * 链路 -> pinpoint
+		    * 服务拓扑
+		    * 代码链
+	    * 业务 -> zabbix + grafana
+	        * 读数据库
+	        * 读日志
+	* 中间件/数据库 -> zabbix + grafana
+	    * 系统资源
+	    * 专门的监控系统
+		    * redis -> rediscloud
+		    * kafka -> kafkaManager
+		    * dubbo -> dubbo admin
+		    * sentinel -> sentinel dashboard
+		    * elastic-job -> elastic-job dashboard
+		    * es -> ?
+* 如何监控 -> 如何实现一个监控系统
+	* 数据采集
 	        * pinpoint agent
 	        * promethus agent
 	        * sentinel
