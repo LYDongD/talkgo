@@ -2274,7 +2274,7 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
         * 纵轴为调用栈，自下而上调用
         * 点击指定函数可向上展开对应的调用栈
 
-#### [50 | 案例篇：动态追踪怎么用？（上）](https://time.geekbang.org/column/article/86490)
+#### [50 | 案例篇：动态追踪怎么用？（上/下）](https://time.geekbang.org/column/article/86490)
 
 > 什么是动态追踪？
 
@@ -2292,5 +2292,96 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
 
 * 内核提供的动态追踪机制
     * perf
+        * perf list -> 查看perf支持的事件
+        * perf probe -> 添加/删除事件
+            * perf probe --add do_sys_open -> 添加事件 do_sys_open 探针
+                * perf record -e probe:do_sys_open -aR sleep 1 -> 添加成功后可指定采集该事件
+                * perf record -e probe:do_sys_open -aR ls -> 追踪ls的do_sys_open事件
+                * perf script 查看追踪报告
+            * perf probe -V do_sys_open -> 查看事件(函数）的参数
+                * yum --enablerepo=base-debuginfo install -y kernel-debuginfo-$(uname -r) -> 如果查看失败则下载调试符号表
+            * perf probe --del probe:do_sys_open -> 删除旧探针
+                * perf probe --add 'do_sys_open filename:string'
+            * perf probe -x /bin/bash 'readline%return +0($retval):string' -> 为/bin/bash的readline函数添加探针
+                * perf probe -x /bin/bash —funcs -> 为/bin/bash的所有函数添加探针
+        * perf trace -> 替代strace的系统调用追踪
     * ftrace
-    * eBPF
+    * eBPF + BCC
+        * 可编写脚本添加探针并追踪
+    * systemTap
+    * sysdig -> 适合容器的动态追踪
+        
+* 如何生成java火焰图
+    * 安装工具lightweight-java-profile
+        * git clone https://github.com/dcapwell/lightweight-java-profiler.gi
+        * cd lightweight-java-profiler/
+        * make all
+    * 运行jvm时指定agent
+        * java -agentpath:/root/lightweight-java-profiler/build-64/liblagent.so demo/Demo
+        * 运行结束时生成traces.txt
+    * 下载FlamGraph工具包
+        * git clone https://github.com/brendangregg/FlameGraph
+    * 使用FlameGraph进行分析
+        * cd FlameGraph
+        * ./FlameGraph/stackcollapse-ljp.awk < ./traces.txt | ./FlameGraph/flamegraph.pl > demo.svg
+
+
+#### [52 | 案例篇：服务吞吐量下降很厉害，怎么分析？](https://time.geekbang.org/column/article/87342)
+
+
+> 笔记
+
+* linux安装wrk
+    * yum -y install openssl-devel git
+    * yum -y install openssl-devel git
+    * 源码安装
+        * git clone https://github.com/wg/wrk.git
+        * cd wrk -> make
+        * cp wrk /usr/local/bin/
+    * rpm
+        * yum install -y https://github.com/scutse/wrk-rpm/releases/download/4.1.0/wrk-4.1.0-1.el7.centos.x86_64.rpm
+
+* 如何排查吞吐量下降严重的问题？
+    * 如何获取qps
+        * wrk -> wrk --latency -c 1000 -t 1800 http://172.18.155.128
+    * 分层排查
+        * tcp层
+            * ss -s -> 查看连接统计
+                * 如果closed和time_waited的连接较多，可能是软资源饱和 
+                    * 连接跟踪表是否饱和
+                        * dmesg |tail -> nf_conntrack: table full, dropping packet
+                        * 查看连接跟踪表配置
+                            * sysctl net.netfilter.nf_conntrack_max 
+                            * sysctl net.netfilter.nf_conntrack_count 
+                        * 调大max
+                            * sysctl -w net.netfilter.nf_conntrack_max=1048576
+                    * 端口数是否饱和 -> 查看应用日志：Cannot assign requested address
+                        * 查看端口范围：sysctl net.ipv4.ip_local_port_range
+                        * 调大端口范围：
+                            * sysctl -w net.ipv4.ip_local_port_range="10000 65535"
+                    * socket连接队列是否饱和 —> 应用层可设置的backlog参数
+                        * 是否发生丢包 -> netstat -s | grep socket
+                            * 查看socket drop 和 socket overflow
+                                * 如果两个指标增加，说明连接队列饱和
+                        * 查看当前连接队列
+                            * ss -ltnp | grep nginx
+                                * SEND-Q 为设置的最大队列长度
+                                * RECV-Q 为当前的队列长度
+                                * 若RECV-Q 近似 SEND-Q，说明队列接近饱和
+                            * 查看进程的设置
+                                * 例如nginx: grep backlog nginx.conf 
+                            * 查看系统的设置
+                                * sysctl net.core.somaxconn
+                        * 调大队列长度
+                            * 调整应用配置
+                            * sysctl -w net.core.somaxconn=65536
+                    * 端口是否被大量time_wait连接占用 —> ss -s 查看time_wait连接数
+                        * 查看端口是否支持重用：sysctl net.ipv4.tcp_tw_reuse
+                        * 设置为可重用 
+                            * sysctl -w net.ipv4.tcp_tw_reuse
+       * 应用层性能瓶颈
+            * top -> 查看热点进程
+            * 分析热点函数
+                * perf record -g
+                * perf script -i ./perf.data | ./FlameGraph/stackcollapse-perf.pl --all | ./FlameGraph/flamegraph.pl > nginx.svg
+            
