@@ -2502,5 +2502,32 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
         * 使用多进程/线程，充分利用系统资源
       
 
+#### [57 | 套路篇：Linux 性能工具速查](https://time.geekbang.org/column/article/89306?utm_source=pc&utm_medium=geektime&utm_campaign=onsell-140&utm_content=chaping&utm_term=pc_interstitial_435)
 
-    
+> 有哪些常用的基准测试工具
+
+* 文件系统/磁盘 IO性能
+    * fio
+* 网络
+    * 网络接口层
+        * pktgen
+    * 网络层
+        * iperf
+    * tcp层
+        * hping3
+    * http层
+        * ab
+        * wrk
+
+#### [58 | 答疑（六）：容器冷启动如何性能分析？](https://time.geekbang.org/column/article/89613?utm_source=pc&utm_medium=geektime&utm_campaign=onsell-140&utm_content=chaping&utm_term=pc_interstitial_435)
+
+* 性能问题分析再总结
+    * 系统资源 - USE
+        * 使用率 + 饱和度 + 错误率
+    * 应用 - RED
+        * rate(qps) + errors + duration(rt)
+
+* 延时分析经验
+
+性能问题很大一部分是延时问题，即执行一个任务的时间太长，甚至引发超时。例如调用第三方接口，访问数据库，或容器启动太慢等问题。
+正如老师说的，分析延时问题本质上是搞清楚时间消耗在哪里。一方面要搞清楚接口的链路，借助分布式链路追踪等工具完整的描绘出链路组成，例如一个简单的网络请求，包括域名解析，连接建立，服务处理和数据包请求响应等子阶段。分解清楚后，通过监控系统或测试复现各个子阶段或子链路的延时，最终找到问题所在并进行优化。
