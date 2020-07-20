@@ -2388,7 +2388,8 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
 #### [53/54 | 套路篇：系统监控/应用监控的综合思路](https://time.geekbang.org/column/article/87980)
 
 > 如何做系统监控
-    * 监控什么 -> 监控哪些系统的哪些指标
+
+* 监控什么 -> 监控哪些系统的哪些指标
 	    * 系统监控(USE) = 硬资源（cpu等） + 软资源（fd数，连接表大小,socket buffer等）
 	        * 系统资源 -> 一下三个指标升高说明可能存在系统资源瓶颈
 	        	* 使用率
@@ -2447,7 +2448,7 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
 	    * zabbix
 	    * elk
 
-    * 如何定位系统瓶颈 -> 怎么分析指标
+* 如何定位系统瓶颈 -> 怎么分析指标
     	* 如何判断当前指标是否为异常指标
 	        * 对比 ->  通过与其他时段和过去同一时段对比，判断当前指标是否存在异常
 	* 排查顺序
