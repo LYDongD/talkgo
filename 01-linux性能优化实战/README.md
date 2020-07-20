@@ -2385,56 +2385,55 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
                 * perf record -g
                 * perf script -i ./perf.data | ./FlameGraph/stackcollapse-perf.pl --all | ./FlameGraph/flamegraph.pl > nginx.svg
 
-#### [53 | 套路篇：系统监控的综合思路](https://time.geekbang.org/column/article/87980)
+#### [53/54 | 套路篇：系统监控/应用监控的综合思路](https://time.geekbang.org/column/article/87980)
 
 > 如何做系统监控
     * 监控什么 -> 监控哪些系统的哪些指标
-	* 系统监控(USE) 
-	    * 系统资源 -> 一下三个指标升高说明可能存在系统资源瓶颈
-		* 使用率
-		* 饱和度
-		* 错误数
-	* 应用
-	    * 健康
-		* 心跳（测试页）
-	    * 接口 -> sentinel + TSDB + grafana
-		* 并发 -> ?
-		* qps
-		* rt
-	    * jvm -> promethus + grafana
-		* 内存
-		* gc
-		* 线程
-	    * pod资源 -> promethus + grafana
-		* cpu
-		* 内存
-		* 网络
-		* 磁盘
-	    * 日志 -> filebeat + elk
-		* 错误日志
-		* 将traceId打印到日志
-	    * 链路 -> pinpoint
-		* 服务拓扑
-		* 代码链
-	* 中间件/数据库 -> zabbix + grafana
-	    * 系统资源
-	    * 专门的监控系统
-		* redis -> rediscloud
-		* kafka -> kafkaManager
-		* dubbo -> dubbo admin
-		* sentinel -> sentinel dashboard
-		* elastic-job -> elastic-job dashboard
-		* es -> ?
-	* 业务 -> zabbix + grafana
-	    * 读数据库
-	    * 读日志
-	    
+	    * 系统监控(USE) = 硬资源（cpu等） + 软资源（fd数，连接表大小,socket buffer等）
+	        * 系统资源 -> 一下三个指标升高说明可能存在系统资源瓶颈
+	        	* 使用率
+	    	    * 饱和度
+	    	    * 错误数
+	    * 应用 = 指标 + 指标上下文
+	        * 健康
+	    	    * 心跳（测试页）
+	        * 接口 -> sentinel + TSDB + grafana
+	    	    * qps
+	    	    * rt
+                * 错误数
+	        * jvm -> promethus + grafana
+	    	    * 内存
+	    	    * gc
+	    	    * 线程
+	        * pod（进程）资源 -> promethus + grafana
+	    	    * cpu
+	        	* 内存
+	    	    * 网络
+	    	    * 磁盘IO
+	        * 日志 -> filebeat + elk
+	    	    * 错误日志
+	    	    * 将traceId打印到日志
+	        * 链路 -> pinpoint
+	    	    * 服务拓扑
+	    	    * 代码链
+	        * 业务 -> zabbix + grafana
+	            * 读数据库
+	            * 读日志
+	    * 中间件/数据库 -> zabbix + grafana
+	        * 系统资源
+	        * 专门的监控系统
+	    	    * redis -> rediscloud
+	    	    * kafka -> kafkaManager
+	    	    * dubbo -> dubbo admin
+	    	    * sentinel -> sentinel dashboard
+	    	    * elastic-job -> elastic-job dashboard
+	    	    * es -> ?
     * 如何监控 -> 如何实现一个监控系统
-	* 数据采集
-	    * pinpoint agent
-	    * promethus agent
-	    * sentinel
-	    * filebeat
+    	* 数据采集
+	        * pinpoint agent
+	        * promethus agent
+	        * sentinel
+	        * filebeat
 	* 数据存储和处理
 	    * hbase
 	    * TSDB
@@ -2449,15 +2448,59 @@ Memory cgroup out of memory: Killed process 10911 (java) total-vm:3541188kB, ano
 	    * elk
 
     * 如何定位系统瓶颈 -> 怎么分析指标
-	* 如何判断当前指标是否为异常指标
-	    * 对比 ->  通过与其他时段和过去同一时段对比，判断当前指标是否存在异常
+    	* 如何判断当前指标是否为异常指标
+	        * 对比 ->  通过与其他时段和过去同一时段对比，判断当前指标是否存在异常
 	* 排查顺序
 	    * 链路分析 -> 确认问题所在链路和相关应用
 	    * 应用分析
 		* 查看应用健康状态
 		* 查看日志，是否有错误或警告日志
-		* 查看系统资源，是否出现异常或饱和
-	    * 热点代码分析
+		* 查看进程资源和系统资源（USE)，是否出现异常或饱和
 		* 结合链路和日志分析热点代码
 		
-	   
+
+#### [55/56 |套路篇：分析/优化性能问题的一般步骤](https://time.geekbang.org/column/article/88667?utm_source=pc&utm_medium=geektime&utm_campaign=onsell-140&utm_content=chaping&utm_term=pc_interstitial_435)
+
+> 如何分析系统资源瓶颈
+
+* 分析思路
+    * 系统资源
+        * 资源USE分析 -> 热点进程 -> 热点函数
+            * 热点函数 -> strace/perf火焰图等
+    * 应用
+        * 进程资源USE -> 结合系统资源USE
+            * 告警
+            * 监控系统
+        * 自身性能
+            * 日志
+            * 个性化监控
+        * 依赖服务瓶颈 
+            * 链路追踪
+
+> 如何优化系统资源瓶颈
+
+* 系统资源
+    * cpu
+        * 优化算法，避免时间开销大的算法
+        * 编译器优化，例如指令重排，指令消除等
+        * 缓存填充，利用cpu缓存，避免伪共享
+        * 资源隔离（cgroup)
+    * 内存
+        * 内存池，避免频繁创建销毁内存
+        * 禁用swap，避免io操作增加内存访问延时
+        * 资源隔离
+    * 网络
+        * 多路复用，同时处理多个socket, 非阻塞
+        * 长连接，避免频繁创建连接
+        * 缓存，例如DNS缓存
+        * 连接参数优化等，例如调整socket缓存大小，开启tcp_reuse等
+    * 磁盘
+        * 使用缓存，减少io访问
+        * 使用高性能磁盘，例如ssd
+        * 优化磁盘IO调度算法
+    * 应用
+        * 使用多进程/线程，充分利用系统资源
+      
+
+
+    
